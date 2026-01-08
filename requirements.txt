@@ -1,0 +1,9 @@
+fastapi
+uvicorn[standard]
+python-dotenv
+
+openai-agents[sqlalchemy]
+sqlalchemy
+greenlet
+
+asyncpg
