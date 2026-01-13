@@ -21,7 +21,7 @@ load_dotenv()
 # -----------------------------
 # ENV
 # -----------------------------
-SESSION_DB_URL = os.getenv("SESSION_DB_URL", "postgresql+asyncpg://sabbipro:6qFYs7ySoOxg0T9J0iOz@staging-sabbipro.clshf78ezgti.us-east-1.rds.amazonaws.com:5432/ai-experiments")
+SESSION_DB_URL = os.getenv("SESSION_DB_URL", "postgresql+asyncpg://admin:pass@localhost:5432/ai-experiments")
 CREATE_SESSION_TABLES = os.getenv("CREATE_SESSION_TABLES", "1").strip().lower() in ("1", "true", "yes")
 
 SESSIONS_TABLE = os.getenv("AGENT_SESSIONS_TABLE", "agent_sessions")

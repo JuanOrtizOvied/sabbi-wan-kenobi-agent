@@ -1,0 +1,71 @@
+name: "Deployment"
+description: "Deploy in server"
+inputs:
+  domain:
+    required: true
+    description: "API domain"
+  ecr_image:
+    required: true
+    description: "ECR image"
+  aws_region:
+    required: true
+    description: "AWS REGION"
+  aws_secret_name:
+    required: true
+    description: "AWS secret name"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Get secrets from secrets manager and create .env
+      shell: bash
+      run: |
+        aws secretsmanager --region ${{ inputs.aws_region }} get-secret-value --secret-id ${{ inputs.aws_secret_name }} --query SecretString --output text > secrets.json
+        cat secrets.json | jq -r 'to_entries|map("\(.key)=\(.value|tostring)")|.[]' > .env
+        sudo rm -rf secrets.json
+
+    - name: Pull image
+      shell: bash
+      run: |
+        aws ecr get-login-password --region ${{ inputs.aws_region }} | docker login --username AWS --password-stdin ${{ inputs.ecr_image }}
+        docker pull ${{ inputs.ecr_image }}
+
+    - name: Stop previous container
+      shell: bash
+      run: docker stop -t 1 sabbi-wan-kenobi-container 2>/dev/null || true
+
+    - name: Remove container
+      shell: bash
+      run: docker rm sabbi-wan-kenobi-container 2>/dev/null || true
+
+    - name: Remove logs volume
+      shell: bash
+      run: docker volume rm andromeda-logs 2>/dev/null || true
+
+    - name: Create logs volume
+      shell: bash
+      run: docker volume create andromeda-logs 2>/dev/null || true
+
+    - name: Run new container
+      shell: bash
+      env:
+        DOMAIN: ${{ inputs.domain }}
+      run: |
+        docker run -d \
+        -p 3001:3001 \
+        --env-file .env \
+        --name sabbi-wan-kenobi-container \
+        --network traefik-network \
+        --restart always \
+        --volume andromeda-logs:/var/log/pm2 \
+        --label traefik.enable=true \
+        --label "traefik.http.routers.andromeda-api.rule=Host(\`${DOMAIN}\`)" \
+        --label traefik.http.routers.andromeda-api.entrypoints=websecured \
+        --label traefik.http.routers.andromeda-api.tls.certresolver=le \
+        --label traefik.http.services.andromeda-api.loadbalancer.server.port=3001 \
+        "${{ inputs.ecr_image }}"
+
+
+    - name: Delete previous image
+      shell: bash
+      run: docker image prune --force -a
