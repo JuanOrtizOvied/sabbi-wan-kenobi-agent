@@ -1,0 +1,63 @@
+name: main
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  bump:
+    name: Bump
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.bump.outputs.new_tag }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Bump version and push tag
+        id: bump
+        uses: anothrNick/github-tag-action@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DEFAULT_BUMP: minor
+          RELEASE_BRANCHES: main
+          WITH_V: true
+          PRERELEASE: true
+          INITIAL_VERSION: 1.0.0
+
+  build:
+    name: Build
+    needs:
+      - bump
+    uses: ./.github/workflows/build_image.yml
+    with:
+      tag: ${{ needs.bump.outputs.version }}
+    secrets:
+      aws_access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      aws_secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      aws_region: ${{ secrets.AWS_REGION }}
+      ecr_repository_name: ${{ vars.ECR_REPOSITORY_NAME }}
+
+  deploy:
+    name: Deploy
+    needs:
+      - build
+      - bump
+    if: always() && needs.build.result == 'success'
+    runs-on: production-server
+    environment: production
+    env:
+      ECR_IMAGE: ${{ secrets.AWS_ECR_REGISTRY }}.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ vars.ECR_REPOSITORY_NAME }}:${{ needs.bump.outputs.version }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Staging Environment
+        uses: ./.github/actions/deploy
+        with:
+          domain: staging-andromeda-api.${{ secrets.HOSTED_ZONE }}
+          ecr_image: ${{ env.ECR_IMAGE }}
+          aws_region: ${{ secrets.AWS_REGION }}
+          aws_secret_name: ${{ secrets.STAGING_SECRET_NAME }}
+
