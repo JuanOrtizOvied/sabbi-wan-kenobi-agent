@@ -41,5 +41,5 @@ jobs:
           ECR_REPOSITORY: ${{ secrets.ecr_repository_name }}
           IMAGE_TAG: ${{ inputs.tag }}
         run: |
-          docker build --target production -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
+          docker build -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG .
           docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
