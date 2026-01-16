@@ -1,9 +1,6 @@
 name: "Deployment"
 description: "Deploy in server"
 inputs:
-  domain:
-    required: true
-    description: "API domain"
   ecr_image:
     required: true
     description: "ECR image"
@@ -48,11 +45,9 @@ runs:
 
     - name: Run new container
       shell: bash
-      env:
-        DOMAIN: ${{ inputs.domain }}
       run: |
         docker run -d \
-        -p 3001:3001 \
+        -p 3000:3000 \
         --env-file .env \
         --name sabbi-wan-kenobi-container \
         --restart always \
