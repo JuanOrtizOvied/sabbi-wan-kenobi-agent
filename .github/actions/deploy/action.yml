@@ -40,11 +40,11 @@ runs:
 
     - name: Remove logs volume
       shell: bash
-      run: docker volume rm andromeda-logs 2>/dev/null || true
+      run: docker volume rm wan-kenobi-logs 2>/dev/null || true
 
     - name: Create logs volume
       shell: bash
-      run: docker volume create andromeda-logs 2>/dev/null || true
+      run: docker volume create wan-kenobi-logs 2>/dev/null || true
 
     - name: Run new container
       shell: bash
@@ -57,7 +57,7 @@ runs:
         --name sabbi-wan-kenobi-container \
         --network traefik-network \
         --restart always \
-        --volume andromeda-logs:/var/log/pm2 \
+        --volume wan-kenobi-logs:/var/log/pm2 \
         --label traefik.enable=true \
         --label "traefik.http.routers.andromeda-api.rule=Host(\`${DOMAIN}\`)" \
         --label traefik.http.routers.andromeda-api.entrypoints=websecured \
