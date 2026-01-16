@@ -15,6 +15,10 @@ WORKDIR /app
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
+RUN mkdir -p /var/log/wan-kenobi/gunicorn \
+    && touch /var/log/wan-kenobi/gunicorn/access.log \
+    && touch /var/log/wan-kenobi/gunicorn/error.log
+
 # Copy application code
 COPY . /app
 
@@ -30,5 +34,5 @@ CMD ["sh", "-c", "gunicorn -k uvicorn.workers.UvicornWorker main:app \
   --timeout ${GUNICORN_TIMEOUT:-60} \
   --graceful-timeout ${GUNICORN_GRACEFUL_TIMEOUT:-30} \
   --keep-alive ${GUNICORN_KEEPALIVE:-5} \
-  --access-logfile - \
-  --error-logfile -"]
+  --access-logfile /var/log/wan-kenobi/gunicorn/access.log \
+  --error-logfile /var/log/wan-kenobi/gunicorn/error.log"]

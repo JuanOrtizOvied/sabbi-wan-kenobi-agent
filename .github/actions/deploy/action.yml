@@ -55,14 +55,8 @@ runs:
         -p 3001:3001 \
         --env-file .env \
         --name sabbi-wan-kenobi-container \
-        --network traefik-network \
         --restart always \
-        --volume wan-kenobi-logs:/var/log/pm2 \
-        --label traefik.enable=true \
-        --label "traefik.http.routers.andromeda-api.rule=Host(\`${DOMAIN}\`)" \
-        --label traefik.http.routers.andromeda-api.entrypoints=websecured \
-        --label traefik.http.routers.andromeda-api.tls.certresolver=le \
-        --label traefik.http.services.andromeda-api.loadbalancer.server.port=3001 \
+        --volume wan-kenobi-logs:/var/log/wan-kenobi \
         "${{ inputs.ecr_image }}"
 
 
