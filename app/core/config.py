@@ -22,3 +22,12 @@ CREATE_SESSION_TABLES = _to_bool(os.getenv("CREATE_SESSION_TABLES", "1"), defaul
 
 SESSIONS_TABLE = os.getenv("AGENT_SESSIONS_TABLE", "agent_sessions")
 MESSAGES_TABLE = os.getenv("AGENT_MESSAGES_TABLE", "agent_messages")
+
+
+class Settings:
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    SABBI_EXPERTO_OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4.1")
+    SABBI_VECTOR_STORE_ID: str = os.getenv("SABBI_VECTOR_STORE_ID", "")
+
+
+settings = Settings()

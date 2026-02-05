@@ -6,19 +6,17 @@ class ChatRequest(BaseModel):
     session_id: str = Field(..., min_length=1, description="Unique id per user/conversation thread")
     message: str = Field(..., min_length=1, description="User message (one turn)")
 
-    # ✅ Vienen en el API como body
-    portafolio_promedio: Optional[Dict[str, Any]] = Field(
-        default=None,
-        description="JSON con portafolio promedio. Requerido al menos en el primer mensaje de la sesión.",
-    )
-    portafolio_inversionista: Optional[Dict[str, Any]] = Field(
-        default=None,
-        description="JSON con portafolio del inversionista. Requerido al menos en el primer mensaje de la sesión.",
-    )
-
-    # ✅ Opcionales (también vienen en el body)
+    # ✅ Opcionales
+    portafolio_promedio: Optional[Dict[str, Any]] = Field(default=None, description="JSON con portafolio promedio (opcional).")
+    portafolio_inversionista: Optional[Dict[str, Any]] = Field(default=None, description="JSON con portafolio del inversionista (opcional).")
     mi_filosofia: Optional[str] = Field(default=None, description="Texto libre del inversionista (opcional)")
-    club_deals_information: Optional[str] = Field(default=None, description="Definición/racional de Club Deals (opcional)")
+
+    # ✅ Club Deals (ambos opcionales)
+    club_deals_concepts: Optional[str] = Field(default=None, description="Conceptos/definición de Club Deals (opcional).")
+    club_deals_opinion: Optional[str] = Field(default=None, description="Qué piensa el inversionista de Club Deals (opcional).")
+
+    # ✅ Legacy (si tu cliente aún lo envía)
+    club_deals_information: Optional[str] = Field(default=None, description="LEGACY: se interpreta como club_deals_concepts.")
 
 
 class ChatResponse(BaseModel):
