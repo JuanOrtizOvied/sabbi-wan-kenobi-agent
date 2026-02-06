@@ -3,86 +3,26 @@ from __future__ import annotations
 import hashlib
 import json
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
 
-from agents import RunConfig, Runner
+from agents import Runner, RunConfig
 from agents.extensions.memory.sqlalchemy_session import SQLAlchemySession
 
 from app.agents.sophistication_evaluator import investor_sophistication_evaluator
 from app.storage.sophistication_store import insert_sophistication
 
 
-def _get_field(obj: Any, key: str) -> Any:
-    if obj is None:
-        return None
-    if isinstance(obj, dict):
-        return obj.get(key)
-    return getattr(obj, key, None)
-
-
-def _extract_text_from_content(content: Any) -> str:
-    if content is None:
-        return ""
-    if isinstance(content, str):
-        return content
-    if isinstance(content, list):
-        parts: List[str] = []
-        for part in content:
-            if isinstance(part, str):
-                parts.append(part)
-            elif isinstance(part, dict):
-                txt = part.get("text") or part.get("content") or ""
-                if isinstance(txt, str) and txt:
-                    parts.append(txt)
-            else:
-                txt = getattr(part, "text", None)
-                if isinstance(txt, str) and txt:
-                    parts.append(txt)
-        return "\n".join(parts)
-    txt = getattr(content, "text", None)
-    return txt if isinstance(txt, str) else str(content)
-
-
-def _extract_text_from_item(item: Any) -> str:
-    if item is None:
-        return ""
-    if isinstance(item, str):
-        return item
-    content = _get_field(item, "content")
-    if content is not None:
-        return _extract_text_from_content(content)
-    return str(item)
-
-
-def _build_eval_transcript(items: List[Any], *, max_lines: int = 60, max_chars_per_line: int = 800) -> str:
-    """Compact transcript for evaluator (avoid huge portfolio context dumps)."""
-    lines: List[str] = []
-    for it in items[-max_lines:]:
-        role = (_get_field(it, "role") or "unknown").upper()
-        txt = (_extract_text_from_item(it) or "").strip()
-        if not txt:
-            continue
-
-        # Skip bulky seeded context blocks
-        if txt.startswith("CONTEXTO —"):
-            continue
-
-        if len(txt) > max_chars_per_line:
-            txt = txt[:max_chars_per_line] + "…(truncado)"
-
-        lines.append(f"{role}: {txt}")
-
-    return "\n".join(lines)
-
-
 def _safe_json_loads(s: str) -> Dict[str, Any]:
     s = (s or "").strip()
-    # strip accidental fences
+    # If model ever returns fenced code, strip it.
     if s.startswith("```"):
         s = s.strip("`")
-        if s.lower().startswith("json"):
-            s = s[4:].strip()
+        s = s.replace("json", "", 1).strip()
     return json.loads(s)
+
+
+def _hash_text(text: str) -> str:
+    return hashlib.sha256((text or "").encode("utf-8")).hexdigest()
 
 
 async def evaluate_and_store_sophistication(
@@ -91,49 +31,77 @@ async def evaluate_and_store_sophistication(
     session_id: str,
     session: SQLAlchemySession,
     presence: Optional[Dict[str, bool]] = None,
+    event_type: Optional[str] = None,
+    philosophy_hash: Optional[str] = None,
 ) -> None:
-    """Runs gpt-4.1 evaluator and stores result in a private table.
+    """
+    Evaluate sophistication INTERNALLY using gpt-4.1 and store results in a private table.
 
-    - presence: optional flags like:
-        {
-          "has_portafolio_promedio": True/False,
-          "has_portafolio_inversionista": True/False,
-          "has_club_deals_concepts": True/False,
-          "has_club_deals_opinion": True/False
-        }
+    IMPORTANT:
+    - Call this ONLY when a philosophy is generated/re-generated (builder_initial/builder_edit)
+    - Do NOT call on every question turn (to avoid latency/cost)
+    - It never returns anything to the user.
+
+    Args:
+      event_type: e.g. "builder_initial" | "builder_edit"
+      philosophy_hash: SHA-256 hex digest of the generated philosophy text (so you can join later)
     """
     if engine is None:
         return
 
+    # Compact transcript for evaluator (avoid sending huge JSONs)
     history = await session.get_items(limit=250)
-    transcript = _build_eval_transcript(history)
 
-    presence = presence or {}
-    presence_text = "\n".join([f"- {k}: {v}" for k, v in presence.items()]) or "- (no flags provided)"
+    # Build a concise transcript: last N items only
+    max_items = 60
+    items = list(history or [])[-max_items:]
+    lines = []
+    for it in items:
+        role = (it.get("role") if isinstance(it, dict) else getattr(it, "role", None)) or "unknown"
+        content = (it.get("content") if isinstance(it, dict) else getattr(it, "content", None))
+        if isinstance(content, list):
+            # keep only text parts, truncated
+            text_parts = []
+            for part in content:
+                if isinstance(part, dict) and isinstance(part.get("text"), str):
+                    text_parts.append(part["text"])
+            txt = "\n".join(text_parts).strip()
+        elif isinstance(content, str):
+            txt = content.strip()
+        else:
+            txt = str(content).strip()
+
+        if not txt:
+            continue
+        if len(txt) > 1200:
+            txt = txt[:1200] + "…(truncado)"
+        lines.append(f"{role.upper()}: {txt}")
+
+    transcript = "\n".join(lines)
 
     prompt = (
-        "Evalúa la sofisticación del inversionista.\n\n"
-        "INPUTS DISPONIBLES (flags):\n"
-        f"{presence_text}\n\n"
-        "TRANSCRIPT (reciente):\n"
-        f"{transcript}"
+        "Evalúa el nivel de sofisticación del inversionista usando este transcript.\n"
+        "Devuelve SOLO JSON válido.\n\n"
+        f"PRESENCE_FLAGS: {presence or {}}\n\n"
+        f"TRANSCRIPT:\n{transcript}\n"
     )
 
+    # NOTE: No session=... here → evaluator output is not written to chat memory
     result = await Runner.run(
         investor_sophistication_evaluator,
         prompt,
-        # IMPORTANT: do NOT pass `session=` to keep it private
         run_config=RunConfig(
             trace_metadata={
                 "__trace_source__": "fastapi-service",
                 "model_route": "sophistication_evaluator",
                 "session_id": session_id,
+                "event_type": event_type or "",
+                "philosophy_hash": philosophy_hash or "",
             }
         ),
     )
 
     raw_out = result.final_output_as(str)
-
     try:
         payload = _safe_json_loads(raw_out)
     except Exception:
@@ -155,8 +123,7 @@ async def evaluate_and_store_sophistication(
         row_id=row_id,
         session_id=session_id,
         payload=payload,
-        raw={
-            "raw_output": raw_out,
-            "presence": presence,
-        },
+        raw={"raw_output": raw_out, "presence": presence or {}},
+        event_type=event_type,
+        philosophy_hash=philosophy_hash,
     )

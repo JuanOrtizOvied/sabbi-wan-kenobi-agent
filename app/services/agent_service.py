@@ -301,6 +301,26 @@ class AgentService:
     async def _append_assistant_message(self, session: SQLAlchemySession, message: str) -> None:
         await session.add_items([{"role": "assistant", "content": message}])
 
+    @classmethod
+    def _infer_presence_from_history(
+            cls,
+            history: List[Any],
+            *,
+            portafolio_promedio: Optional[Dict[str, Any]],
+            portafolio_inversionista: Optional[Dict[str, Any]],
+            club_deals_concepts: Optional[str],
+            club_deals_opinion: Optional[str],
+    ) -> Dict[str, bool]:
+        # Si el request no trae inputs, igual podrían existir en el historial (seed/update previos).
+        text = "\n".join(cls._extract_text_from_item(it) for it in (history or []))
+        return {
+            "has_portafolio_promedio": (portafolio_promedio is not None) or ("portafolio_promedio" in text),
+            "has_portafolio_inversionista": (portafolio_inversionista is not None) or (
+                        "portafolio_inversionista" in text),
+            "has_club_deals_concepts": bool(club_deals_concepts) or ("club_deals_concepts" in text),
+            "has_club_deals_opinion": bool(club_deals_opinion) or ("club_deals_opinion" in text),
+        }
+
     # -------------------------
     # Main chat
     # -------------------------
@@ -360,7 +380,6 @@ class AgentService:
                 return "Perfecto. Queda como versión final:\n\n" + last_philosophy
 
             if self._user_requests_regenerate(message):
-                # Regenerar filosofía con gpt-5.1 (usará todo el historial)
                 run_message = (
                     "Actualiza la filosofía anterior (incluida la versión para redes) según los cambios "
                     "y aclaraciones del usuario en la conversación. Devuelve los DOS BLOQUES obligatorios."
@@ -379,6 +398,25 @@ class AgentService:
                         ),
                     )
                 philosophy_text = result.final_output_as(str)
+
+                # ✅ Evaluar sofisticación SOLO cuando se genera/re-genera filosofía
+                presence = self._infer_presence_from_history(
+                    history=await session.get_items(limit=250),
+                    portafolio_promedio=portafolio_promedio,
+                    portafolio_inversionista=portafolio_inversionista,
+                    club_deals_concepts=club_deals_concepts,
+                    club_deals_opinion=club_deals_opinion,
+                )
+                philosophy_hash = hashlib.sha256(philosophy_text.encode("utf-8")).hexdigest()
+
+                await evaluate_and_store_sophistication(
+                    engine=self._engine,
+                    session_id=session_id,
+                    session=session,  # solo lectura de historial
+                    presence=presence,
+                    event_type="builder_initial",
+                    philosophy_hash=philosophy_hash,
+                )
 
                 # Luego: pregunta de refinamiento (gpt-4.1)
                 refine_prompt = (
@@ -399,6 +437,7 @@ class AgentService:
                     ),
                 )
                 refine_q = refine_result.final_output_as(str)
+
                 return philosophy_text + "\n\n" + refine_q
 
             # Si NO quiere regenerar aún: seguir preguntando (gpt-4.1) hasta que lo pida
@@ -450,6 +489,25 @@ class AgentService:
                 )
             philosophy_text = result.final_output_as(str)
 
+            # ✅ Evaluar sofisticación SOLO cuando se genera/re-genera filosofía
+            presence = self._infer_presence_from_history(
+                history=await session.get_items(limit=250),
+                portafolio_promedio=portafolio_promedio,
+                portafolio_inversionista=portafolio_inversionista,
+                club_deals_concepts=club_deals_concepts,
+                club_deals_opinion=club_deals_opinion,
+            )
+            philosophy_hash = hashlib.sha256(philosophy_text.encode("utf-8")).hexdigest()
+
+            await evaluate_and_store_sophistication(
+                engine=self._engine,
+                session_id=session_id,
+                session=session,  # solo lectura
+                presence=presence,
+                event_type="builder_edit",
+                philosophy_hash=philosophy_hash,
+            )
+
             # Pregunta de afinado con gpt-4.1 inmediatamente después
             refine_prompt = (
                 "Esta es la filosofía recién generada (incluye versión para redes). "
@@ -486,17 +544,5 @@ class AgentService:
                     }
                 ),
             )
-
-        await evaluate_and_store_sophistication(
-            engine=self._engine,
-            session_id=session_id,
-            session=session,
-            presence={
-                "has_portafolio_promedio": portafolio_promedio is not None,
-                "has_portafolio_inversionista": portafolio_inversionista is not None,
-                "has_club_deals_concepts": bool(club_deals_concepts),
-                "has_club_deals_opinion": bool(club_deals_opinion),
-            },
-        )
 
         return result.final_output_as(str)
