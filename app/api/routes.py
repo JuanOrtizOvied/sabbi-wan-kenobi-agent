@@ -1,3 +1,4 @@
+# app/api/routes.py
 from fastapi import APIRouter, HTTPException, Request
 
 from app.api.schemas import ChatRequest, ChatResponse
@@ -17,12 +18,13 @@ async def chat(req: ChatRequest, request: Request):
         output_text = await service.chat(
             session_id=req.session_id,
             message=req.message,
-            portafolio_promedio=req.portafolio_promedio,
-            portafolio_inversionista=req.portafolio_inversionista,
-            mi_filosofia=req.mi_filosofia,
-            club_deals_concepts=req.club_deals_concepts,
-            club_deals_opinion=req.club_deals_opinion,
-            club_deals_information=req.club_deals_information,
+            portafolio_promedio=getattr(req, "portafolio_promedio", None),
+            portafolio_inversionista=getattr(req, "portafolio_inversionista", None),
+            mi_filosofia=getattr(req, "mi_filosofia", None),
+            club_deals_concepts=getattr(req, "club_deals_concepts", None),
+            club_deals_opinion=getattr(req, "club_deals_opinion", None),
+            # legacy
+            club_deals_information=getattr(req, "club_deals_information", None),
         )
         return ChatResponse(session_id=req.session_id, output_text=output_text)
 

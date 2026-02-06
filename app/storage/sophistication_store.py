@@ -4,23 +4,24 @@ from datetime import datetime, timezone
 from typing import Any, Dict, Optional
 
 from sqlalchemy import (
-    MetaData,
-    Table,
     Column,
-    String,
-    Float,
     DateTime,
-    Text,
+    Float,
     JSON,
+    MetaData,
+    String,
+    Table,
+    Text,
 )
 from sqlalchemy.ext.asyncio import AsyncEngine
 
 metadata = MetaData()
 
+# Append-only private table to store internal investor sophistication evaluations.
 investor_sophistication_table = Table(
     "investor_sophistication",
     metadata,
-    Column("id", String(64), primary_key=True),               # id determinístico o uuid
+    Column("id", String(64), primary_key=True),
     Column("session_id", String(256), index=True, nullable=False),
     Column("level", String(32), nullable=False),
     Column("score", Float, nullable=False),
@@ -34,10 +35,7 @@ investor_sophistication_table = Table(
 
 
 async def ensure_sophistication_table(engine: AsyncEngine) -> None:
-    """
-    Crea la tabla si no existe.
-    - Úsalo en startup si CREATE_SESSION_TABLES=True, o siempre si te da igual.
-    """
+    """Create table if it does not exist (safe / idempotent)."""
     async with engine.begin() as conn:
         await conn.run_sync(metadata.create_all)
 

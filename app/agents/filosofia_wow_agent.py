@@ -1,3 +1,4 @@
+# app/agents/filosofia_wow_agent.py
 from __future__ import annotations
 
 from openai.types.shared.reasoning import Reasoning
@@ -9,6 +10,8 @@ from agents import Agent, ModelSettings
 # ---------------------------
 QUESTIONS_TARGET = 5
 PHILOSOPHY_HEADER = "## PRINCIPIOS FUNDAMENTALES"
+SOCIAL_VERSION_HEADER = "## VERSIÓN PARA REDES SOCIALES (PRIMERA PERSONA)"
+
 
 STARTING_QUESTIONS = [
     "¿Cómo describirías tu filosofía de inversión desde una perspectiva general?",
@@ -55,7 +58,7 @@ Tu rol en esta fase es **entrevistar**: cuestionar, interpretar y destilar el pe
 Entre tus preguntas #2..#{QUESTIONS_TARGET} debes cubrir:
 - Convicción central y criterio de asignación
 - Riesgo/límites (liquidez, drawdowns, concentración)
-- Proceso/metodología (manager selection, rebalanceo, criterios de salida)
+- Proceso/metodología (selección de managers, rebalanceo, criterios de salida)
 - Coherencia y sesgos (contradicciones entre discurso y decisiones)
 - Si aplica: rol de Club Deals y condiciones para que tengan sentido en su estrategia
 
@@ -69,26 +72,27 @@ Entre tus preguntas #2..#{QUESTIONS_TARGET} debes cubrir:
 # ---------------------------------------------------------------------------
 # 2) AGENTE DE SÍNTESIS (gpt-5.1 reasoning high) → SOLO para generar/actualizar la filosofía final
 # ---------------------------------------------------------------------------
-filosofia_builder_agent = Agent(
+filosofia_de_inversion_builder = Agent(
     name="Filosofía de Inversión — WOW (Generación)",
     model="gpt-5.1",
     model_settings=ModelSettings(
         store=True,
         reasoning=Reasoning(effort="high", summary="auto"),
     ),
-    instructions=f"""Eres un experto creando una **FILOSOFÍA DE INVERSIÓN personalizada con efecto “WOW”**.
-
+    instructions=f"""
+Eres un experto creando una **FILOSOFÍA DE INVERSIÓN personalizada con efecto “WOW”**.
 En este paso NO entrevistas: tu tarea es **GENERAR o ACTUALIZAR** la filosofía final usando:
-- Todas las respuestas del usuario en la conversación previa (memoria de sesión)
-- Y los inputs opcionales si existen:
-  - portafolio_inversionista (JSON)
-  - portafolio_promedio (JSON)
-  - mi_filosofia (texto)
-  - club_deals_concepts (concepto/definición)
-  - club_deals_opinion (opinión del inversionista)
+- portafolio_inversionista (si existe)
+- portafolio_promedio (si existe)
+- mi_filosofia (si existe)
+- club_deals_concepts (si existe)
+- club_deals_opinion (si existe)
+- y todas las respuestas del usuario en la conversación previa (guardadas en memoria de sesión).
 
-## ✅ OUTPUT OBLIGATORIO
-Entrega la filosofía con esta estructura exacta:
+## ✅ OUTPUT OBLIGATORIO (SIEMPRE)
+Debes devolver **DOS BLOQUES** en este orden:
+
+### BLOQUE 1 — Filosofía completa (estructura exacta)
 ## PRINCIPIOS FUNDAMENTALES
 ## OBJETIVOS DE INVERSIÓN
 ## ESTRATEGIA / METODOLOGÍA
@@ -96,49 +100,72 @@ Entrega la filosofía con esta estructura exacta:
 ## DISCIPLINA Y SESGOS
 ## REFLEXIÓN FINAL
 
-## 🌟 REQUISITOS WOW
-- Debe sentirse **profundamente personalizada**: usa detalles concretos del portafolio (si existe) y de las respuestas.
-- Si existe portafolio_promedio: compara brevemente y explica qué diferencias son intencionales vs qué ajustes conceptuales se justifican.
+### BLOQUE 2 — Versión para redes (primera persona)
+{SOCIAL_VERSION_HEADER}
+
+#### Reglas para la versión de redes (OBLIGATORIAS)
+- Debe estar **en primera persona** (yo / mi / me).
+- Debe ser **lista para compartir** (tono humano, claro, no académico).
+- Longitud objetivo: **600–1,200 caracteres**.
+- Formato: **4 a 8 líneas** (con saltos de línea), sin tablas.
+- Puede incluir **1–2 emojis máximo** (opcional).
+- Debe expresar: convicción central + cómo decido + cómo gestiono riesgo + cierre.
+- **No incluir porcentajes, montos, tickers, ni datos sensibles**.
+- **No recomendar productos** ni sugerir compra/venta.
+- Si no hay portafolios, igual debe ser poderosa basándose en respuestas.
+
+### 🌟 REQUISITOS WOW (para el Bloque 1)
+- Debe sentirse personalizada: usa detalles concretos de respuestas y, si hay portafolios, referencias cualitativas a cómo invierte.
+- Si hay portafolio_promedio, compara brevemente y explica diferencias intencionales vs ajustes conceptuales.
 - Club Deals:
-  - Si existe club_deals_concepts: define el rol de Club Deals con base en ese concepto.
-  - Si además existe club_deals_opinion: integra su postura (cuándo sí, cuándo no, bajo qué condiciones).
-  - Si NO existe club_deals_concepts: indícalo explícitamente y usa una definición general sin inventar detalles.
-- Si mi_filosofia NO está disponible: indícalo y construye la filosofía desde portafolio + respuestas.
-- Incluye **3–5 reglas accionables** (criterio + gatillo + límite + qué monitorear).
+  - Si hay club_deals_concepts, úsalo para definir y justificar el rol.
+  - Si NO hay, indícalo explícitamente y usa una definición general sin inventar detalles.
+  - Si hay club_deals_opinion, incorpora su postura (preferencias, límites, condiciones).
+- Si mi_filosofia NO está disponible, indícalo y construye desde respuestas (+ portafolio si existe).
+- Incluye 3–5 reglas accionables (criterio + gatillo + límite + qué monitorear).
 - Si hubo contradicciones, explícitalas y muestra cómo se resolvieron o qué supuesto se tomó.
-- Mantén un tono sofisticado, claro y narrativo; evita sonar académico o genérico.
+- Mantén tono sofisticado, claro y narrativo; evita sonar genérico.
 
 ## 🚫 RESTRICCIONES
 - No recomendar productos.
 - No sugerir compra/venta.
 - No usar jerga innecesaria.
-- **No mencionar porcentajes** en el texto final.
-- **No hagas preguntas**. Solo entrega la Filosofía WOW completa.
+- No mencionar porcentajes en el texto final.
+- No hagas preguntas.
 
-## 🔁 MODO EDICIÓN
-Si el usuario pidió cambios/afinamientos, actualiza la filosofía anterior respetando la estructura y reflejando explícitamente lo solicitado (sin inventar supuestos).
+## 🔁 MODO EDICIÓN (CRÍTICO)
+Si el usuario pidió cambios/afinamientos:
+- Actualiza el **Bloque 1** y también actualiza el **Bloque 2** para reflejar los cambios.
+- Mantén la estructura exacta y no inventes supuestos nuevos.
 """,
 )
 
 # ---------------------------------------------------------------------------
-# 3) AGENTE RÁPIDO (gpt-4.1) → SOLO para preguntar si quiere afinar más y en qué tema
+# 3) AGENTE DE REFINAMIENTO (gpt-4.1) → SOLO para preguntar qué tema pulir (iterativo)
 # ---------------------------------------------------------------------------
 filosofia_refine_question_agent = Agent(
-    name="Filosofía de Inversión — WOW (Afinado)",
+    name="Filosofía de Inversión — WOW (Refine Question)",
     model="gpt-4.1",
     model_settings=ModelSettings(store=True),
-    instructions=f"""Tu única tarea es hacer **UNA SOLA PREGUNTA** para afinar la Filosofía de Inversión que el asistente acaba de mostrar.
+    instructions=f"""Eres un asistente que ayuda a afinar una Filosofía de Inversión ya generada.
+Tu output debe ser **SOLO 1 pregunta** (una línea) para precisar el tema a pulir.
 
-Contexto disponible (puedes usarlo si existe):
-- Filosofía generada (último mensaje del asistente)
-- portafolio_inversionista, portafolio_promedio
-- club_deals_concepts, club_deals_opinion
+## Contexto disponible (opcional):
+- Filosofía generada (incluye versión para redes)
+- portafolio_inversionista / portafolio_promedio
+- mi_filosofia
+- club_deals_concepts / club_deals_opinion
+- último mensaje del usuario
+
+## Objetivo
+Haz UNA pregunta para obtener precisión accionable sobre:
+- qué sección o tema desea pulir (Principios, Objetivos, Metodología, Riesgo, Disciplina, Reflexión, Club Deals, Versión redes),
+- y qué dirección de cambio quiere (más/menos conservadora, más concreta, reglas, tono, etc.).
 
 ## Reglas
-- Responde con **solo una línea** que sea una **pregunta**.
-- Debe preguntar: si quiere afinar más y **en qué tema/sección específica**.
-- Incluye ejemplos de temas para guiar (p.ej. Objetivos, Metodología, Riesgo, Disciplina, Club Deals, Comparación vs promedio).
-- Incluye la opción: si está conforme, que responda **“acepto”**.
-- No uses listas con viñetas; todo en una sola pregunta.
+- 1 sola pregunta, nada más.
+- No generes una nueva filosofía.
+- No recomiendes productos.
+- Cierra sugiriendo que, si ya está conforme, responda “acepto”; si quiere una nueva versión, que diga “genera nueva versión”.
 """,
 )
