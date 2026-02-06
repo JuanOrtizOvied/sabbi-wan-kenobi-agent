@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import hashlib
+import hashlib as _hashlib
 from typing import Any, Dict, List, Optional, Tuple
 
 from agents import Runner, RunConfig, trace
@@ -9,11 +10,13 @@ from agents.extensions.memory.sqlalchemy_session import SQLAlchemySession
 
 from app.agents.filosofia_wow_agent import (
     PHILOSOPHY_HEADER,
+    SOCIAL_VERSION_HEADER,
     QUESTIONS_TARGET,
     STARTING_QUESTIONS,
     filosofia_de_inversion_builder,
     filosofia_questions_agent,
     filosofia_refine_question_agent,
+    filosofia_social_version_agent,
 )
 from app.core.config import CREATE_SESSION_TABLES, MESSAGES_TABLE, SESSIONS_TABLE, SESSION_DB_URL
 from app.utils.json_utils import pretty_json
@@ -37,6 +40,10 @@ class AgentService:
         - gpt-4.1 pregunta iterativamente qué tema pulir
         - SOLO cuando el usuario lo pida ("genera nueva versión", "actualiza", etc.), se regenera con gpt-5.1
         - Termina cuando el usuario responde "acepto"
+
+    Retro-compat:
+    - Si ya existe una filosofía anterior SIN versión para redes, se puede crear un bloque social
+      a pedido del usuario ("versión para redes", "copy para redes", etc.) sin hacer preguntas extra.
     """
 
     def __init__(self) -> None:
@@ -82,35 +89,22 @@ class AgentService:
         club_deals_concepts: Optional[str],
         club_deals_opinion: Optional[str],
     ) -> List[TResponseInputItem]:
-        """
-        Inserta SOLO lo que exista para reducir tokens.
-        """
         content: List[Dict[str, Any]] = []
 
         if portafolio_promedio is not None:
             content.append(
-                {
-                    "type": "input_text",
-                    "text": "CONTEXTO — portafolio_promedio (JSON):\n" + pretty_json(portafolio_promedio),
-                }
+                {"type": "input_text", "text": "CONTEXTO — portafolio_promedio (JSON):\n" + pretty_json(portafolio_promedio)}
             )
         if portafolio_inversionista is not None:
             content.append(
-                {
-                    "type": "input_text",
-                    "text": "CONTEXTO — portafolio_inversionista (JSON):\n" + pretty_json(portafolio_inversionista),
-                }
+                {"type": "input_text", "text": "CONTEXTO — portafolio_inversionista (JSON):\n" + pretty_json(portafolio_inversionista)}
             )
         if mi_filosofia:
             content.append({"type": "input_text", "text": "CONTEXTO — mi_filosofia (texto):\n" + mi_filosofia})
         if club_deals_concepts:
-            content.append(
-                {"type": "input_text", "text": "CONTEXTO — club_deals_concepts:\n" + club_deals_concepts}
-            )
+            content.append({"type": "input_text", "text": "CONTEXTO — club_deals_concepts:\n" + club_deals_concepts})
         if club_deals_opinion:
-            content.append(
-                {"type": "input_text", "text": "CONTEXTO — club_deals_opinion:\n" + club_deals_opinion}
-            )
+            content.append({"type": "input_text", "text": "CONTEXTO — club_deals_opinion:\n" + club_deals_opinion})
 
         if not content:
             return []
@@ -151,20 +145,11 @@ class AgentService:
         club_deals_concepts: Optional[str],
         club_deals_opinion: Optional[str],
     ) -> None:
-        """
-        Si el cliente envía nuevos inputs en requests posteriores, los guardamos como UPDATE
-        para que el agente los pueda usar desde ese punto en adelante.
-        (No hacemos dedupe profundo para mantener simple y evitar costosos diffs de JSON).
-        """
         content: List[Dict[str, Any]] = []
         if portafolio_promedio is not None:
-            content.append(
-                {"type": "input_text", "text": "UPDATE — portafolio_promedio (JSON):\n" + pretty_json(portafolio_promedio)}
-            )
+            content.append({"type": "input_text", "text": "UPDATE — portafolio_promedio (JSON):\n" + pretty_json(portafolio_promedio)})
         if portafolio_inversionista is not None:
-            content.append(
-                {"type": "input_text", "text": "UPDATE — portafolio_inversionista (JSON):\n" + pretty_json(portafolio_inversionista)}
-            )
+            content.append({"type": "input_text", "text": "UPDATE — portafolio_inversionista (JSON):\n" + pretty_json(portafolio_inversionista)})
         if mi_filosofia is not None:
             content.append({"type": "input_text", "text": "UPDATE — mi_filosofia:\n" + (mi_filosofia or "VACÍO")})
         if club_deals_concepts is not None:
@@ -216,19 +201,7 @@ class AgentService:
         return txt if isinstance(txt, str) else str(content)
 
     @classmethod
-    def _sorted_items(cls, items: List[Any]) -> List[Any]:
-        # Best-effort: DB tends to already be ordered, but keep stable sort fallback.
-        def ts(it: Any) -> Tuple[int, int]:
-            v = cls._get_field(it, "id") or ""
-            return (0, hash(v))
-
-        return list(items or [])
-
-    @classmethod
     def _last_philosophy(cls, items: List[Any]) -> Optional[str]:
-        """
-        Encuentra el último mensaje del asistente que contiene el header de filosofía.
-        """
         for it in reversed(items or []):
             if cls._get_field(it, "role") != "assistant":
                 continue
@@ -239,10 +212,6 @@ class AgentService:
 
     @classmethod
     def _count_questions_before_philosophy(cls, items: List[Any]) -> int:
-        """
-        Cuenta cuántas preguntas de entrevista (terminan en '?') ha hecho el asistente
-        ANTES de que exista una filosofía.
-        """
         count = 0
         for it in items or []:
             if cls._get_field(it, "role") != "assistant":
@@ -251,7 +220,7 @@ class AgentService:
             if not txt:
                 continue
             if PHILOSOPHY_HEADER in txt:
-                break  # a partir de aquí ya existe filosofía
+                break
             if txt.endswith("?"):
                 count += 1
         return count
@@ -285,6 +254,25 @@ class AgentService:
         ]
         return any(t in m for t in triggers)
 
+    @classmethod
+    def _user_requests_social_version(cls, message: str) -> bool:
+        m = cls._norm(message)
+        triggers = [
+            "version para redes",
+            "versión para redes",
+            "copy para redes",
+            "texto para redes",
+            "post para redes",
+            "caption",
+            "instagram",
+            "linkedin",
+            "para compartir",
+            "para publicar",
+            "version corta",
+            "versión corta",
+        ]
+        return any(t in m for t in triggers)
+
     # -------------------------
     # Starting question selection
     # -------------------------
@@ -303,23 +291,60 @@ class AgentService:
 
     @classmethod
     def _infer_presence_from_history(
-            cls,
-            history: List[Any],
-            *,
-            portafolio_promedio: Optional[Dict[str, Any]],
-            portafolio_inversionista: Optional[Dict[str, Any]],
-            club_deals_concepts: Optional[str],
-            club_deals_opinion: Optional[str],
+        cls,
+        history: List[Any],
+        *,
+        portafolio_promedio: Optional[Dict[str, Any]],
+        portafolio_inversionista: Optional[Dict[str, Any]],
+        club_deals_concepts: Optional[str],
+        club_deals_opinion: Optional[str],
     ) -> Dict[str, bool]:
-        # Si el request no trae inputs, igual podrían existir en el historial (seed/update previos).
         text = "\n".join(cls._extract_text_from_item(it) for it in (history or []))
         return {
             "has_portafolio_promedio": (portafolio_promedio is not None) or ("portafolio_promedio" in text),
-            "has_portafolio_inversionista": (portafolio_inversionista is not None) or (
-                        "portafolio_inversionista" in text),
+            "has_portafolio_inversionista": (portafolio_inversionista is not None) or ("portafolio_inversionista" in text),
             "has_club_deals_concepts": bool(club_deals_concepts) or ("club_deals_concepts" in text),
             "has_club_deals_opinion": bool(club_deals_opinion) or ("club_deals_opinion" in text),
         }
+
+    @staticmethod
+    def _extract_social_block(philosophy_text: str) -> str:
+        txt = philosophy_text or ""
+        idx = txt.find(SOCIAL_VERSION_HEADER)
+        if idx == -1:
+            return ""
+        return txt[idx:].strip()
+
+    async def _ensure_social_version_for_existing_philosophy(
+        self,
+        *,
+        session: SQLAlchemySession,
+        last_philosophy: str,
+    ) -> str:
+        if SOCIAL_VERSION_HEADER in (last_philosophy or ""):
+            return last_philosophy
+
+        social_prompt = (
+            "Genera SOLO el bloque de versión para redes sociales en primera persona, "
+            "basado en la filosofía existente.\n\n"
+            f"FILOSOFÍA EXISTENTE:\n{last_philosophy}\n"
+        )
+        with trace("Filosofia WOW (Social Only)"):
+            social_res = await Runner.run(
+                filosofia_social_version_agent,
+                social_prompt,
+                run_config=RunConfig(
+                    trace_metadata={
+                        "__trace_source__": "fastapi-service",
+                        "model_route": "social_only",
+                    }
+                ),
+            )
+        social_block = (social_res.final_output_as(str) or "").strip()
+
+        combined = (last_philosophy or "").rstrip() + "\n\n" + social_block
+        await self._append_assistant_message(session, combined)
+        return combined
 
     # -------------------------
     # Main chat
@@ -334,10 +359,8 @@ class AgentService:
         mi_filosofia: Optional[str] = None,
         club_deals_concepts: Optional[str] = None,
         club_deals_opinion: Optional[str] = None,
-        # legacy:
         club_deals_information: Optional[str] = None,
     ) -> str:
-        # Backward-compat: si viene club_deals_information y no viene concepts, úsalo como concepts
         if club_deals_concepts is None and club_deals_information:
             club_deals_concepts = club_deals_information
 
@@ -352,7 +375,6 @@ class AgentService:
             club_deals_opinion=club_deals_opinion,
         )
 
-        # Si llegan inputs luego, guardarlos como UPDATE
         await self._append_context_updates(
             session,
             portafolio_promedio=portafolio_promedio,
@@ -365,17 +387,25 @@ class AgentService:
         history = await session.get_items(limit=250)
         last_philosophy = self._last_philosophy(history)
 
-        # 0) Si aún no hay ningún mensaje del asistente: iniciar con pregunta hardcode
         assistant_exists = any(self._get_field(it, "role") == "assistant" for it in history or [])
         if not assistant_exists:
-            # Guardamos el primer mensaje del usuario (por si ya trae contenido útil)
             await self._append_user_message(session, message)
             q1 = self._pick_starting_question(session_id)
             await self._append_assistant_message(session, q1)
             return q1
 
-        # 1) Modo refinamiento (ya existe filosofía)
+        # 1) Ya existe filosofía
         if last_philosophy:
+            # ✅ SOCIAL-ONLY: si el usuario pide versión para redes, devolver SOLO ese bloque (sin preguntas)
+            if self._user_requests_social_version(message):
+                if SOCIAL_VERSION_HEADER not in last_philosophy:
+                    last_philosophy = await self._ensure_social_version_for_existing_philosophy(
+                        session=session,
+                        last_philosophy=last_philosophy,
+                    )
+                social_block = self._extract_social_block(last_philosophy)
+                return social_block or "No pude encontrar/generar la versión para redes. ¿Quieres que la regenere?"
+
             if self._user_accepts(message):
                 return "Perfecto. Queda como versión final:\n\n" + last_philosophy
 
@@ -392,14 +422,12 @@ class AgentService:
                         run_config=RunConfig(
                             trace_metadata={
                                 "__trace_source__": "fastapi-service",
-                                "workflow_id": "wf_693a02d72190819097a8a7b5234510f70851015287e3b178",
                                 "model_route": "builder_edit",
                             }
                         ),
                     )
                 philosophy_text = result.final_output_as(str)
 
-                # ✅ Evaluar sofisticación SOLO cuando se genera/re-genera filosofía
                 presence = self._infer_presence_from_history(
                     history=await session.get_items(limit=250),
                     portafolio_promedio=portafolio_promedio,
@@ -407,18 +435,16 @@ class AgentService:
                     club_deals_concepts=club_deals_concepts,
                     club_deals_opinion=club_deals_opinion,
                 )
-                philosophy_hash = hashlib.sha256(philosophy_text.encode("utf-8")).hexdigest()
-
+                philosophy_hash = _hashlib.sha256((philosophy_text or "").encode("utf-8")).hexdigest()
                 await evaluate_and_store_sophistication(
                     engine=self._engine,
                     session_id=session_id,
-                    session=session,  # solo lectura de historial
+                    session=session,
                     presence=presence,
-                    event_type="builder_initial",
+                    event_type="builder_edit",
                     philosophy_hash=philosophy_hash,
                 )
 
-                # Luego: pregunta de refinamiento (gpt-4.1)
                 refine_prompt = (
                     "Esta es la filosofía actual (incluye versión para redes). "
                     "Haz una sola pregunta para precisar qué tema pulir a continuación.\n\n"
@@ -431,7 +457,6 @@ class AgentService:
                     run_config=RunConfig(
                         trace_metadata={
                             "__trace_source__": "fastapi-service",
-                            "workflow_id": "wf_693a02d72190819097a8a7b5234510f70851015287e3b178",
                             "model_route": "refine_question",
                         }
                     ),
@@ -440,7 +465,7 @@ class AgentService:
 
                 return philosophy_text + "\n\n" + refine_q
 
-            # Si NO quiere regenerar aún: seguir preguntando (gpt-4.1) hasta que lo pida
+            # Refinamiento normal (1 pregunta)
             refine_prompt = (
                 "Tenemos una filosofía ya generada. "
                 "El usuario respondió esto:\n"
@@ -458,17 +483,15 @@ class AgentService:
                     run_config=RunConfig(
                         trace_metadata={
                             "__trace_source__": "fastapi-service",
-                            "workflow_id": "wf_693a02d72190819097a8a7b5234510f70851015287e3b178",
                             "model_route": "refine_question",
                         }
                     ),
                 )
             return refine_result.final_output_as(str)
 
-        # 2) Modo entrevista (no hay filosofía aún)
+        # 2) No hay filosofía aún → entrevista
         question_count = self._count_questions_before_philosophy(history)
 
-        # Si ya se hicieron 5 preguntas: el siguiente turno del usuario gatilla generación
         if question_count >= QUESTIONS_TARGET:
             run_message = (
                 "Genera mi Filosofía de Inversión WOW final ahora, usando todo el contexto y respuestas previas. "
@@ -482,14 +505,12 @@ class AgentService:
                     run_config=RunConfig(
                         trace_metadata={
                             "__trace_source__": "fastapi-service",
-                            "workflow_id": "wf_693a02d72190819097a8a7b5234510f70851015287e3b178",
                             "model_route": "builder_initial",
                         }
                     ),
                 )
             philosophy_text = result.final_output_as(str)
 
-            # ✅ Evaluar sofisticación SOLO cuando se genera/re-genera filosofía
             presence = self._infer_presence_from_history(
                 history=await session.get_items(limit=250),
                 portafolio_promedio=portafolio_promedio,
@@ -497,18 +518,16 @@ class AgentService:
                 club_deals_concepts=club_deals_concepts,
                 club_deals_opinion=club_deals_opinion,
             )
-            philosophy_hash = hashlib.sha256(philosophy_text.encode("utf-8")).hexdigest()
-
+            philosophy_hash = _hashlib.sha256((philosophy_text or "").encode("utf-8")).hexdigest()
             await evaluate_and_store_sophistication(
                 engine=self._engine,
                 session_id=session_id,
-                session=session,  # solo lectura
+                session=session,
                 presence=presence,
-                event_type="builder_edit",
+                event_type="builder_initial",
                 philosophy_hash=philosophy_hash,
             )
 
-            # Pregunta de afinado con gpt-4.1 inmediatamente después
             refine_prompt = (
                 "Esta es la filosofía recién generada (incluye versión para redes). "
                 "Haz una sola pregunta para que el usuario indique qué desea afinar y en qué tema específico. "
@@ -522,7 +541,6 @@ class AgentService:
                 run_config=RunConfig(
                     trace_metadata={
                         "__trace_source__": "fastapi-service",
-                        "workflow_id": "wf_693a02d72190819097a8a7b5234510f70851015287e3b178",
                         "model_route": "refine_question",
                     }
                 ),
@@ -530,7 +548,6 @@ class AgentService:
             refine_q = refine_result.final_output_as(str)
             return philosophy_text + "\n\n" + refine_q
 
-        # Si faltan preguntas (2..5): seguir preguntando con gpt-4.1
         with trace("Filosofia WOW (Questions)"):
             result = await Runner.run(
                 filosofia_questions_agent,
@@ -539,7 +556,6 @@ class AgentService:
                 run_config=RunConfig(
                     trace_metadata={
                         "__trace_source__": "fastapi-service",
-                        "workflow_id": "wf_693a02d72190819097a8a7b5234510f70851015287e3b178",
                         "model_route": "questions",
                     }
                 ),
