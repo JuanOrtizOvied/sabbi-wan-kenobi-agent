@@ -1,8 +1,14 @@
 from __future__ import annotations
 
+import hashlib
+import json
+
+from app.agents.sophistication_evaluator import investor_sophistication_evaluator
+from app.storage.sophistication_store import ensure_sophistication_table, insert_sophistication
+
+
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
-import hashlib
 
 from agents import Runner, RunConfig, trace
 from agents.extensions.memory.sqlalchemy_session import SQLAlchemySession
@@ -10,10 +16,10 @@ from agents.extensions.memory.sqlalchemy_session import SQLAlchemySession
 from app.agents.filosofia_wow_agent import (
     PHILOSOPHY_HEADER,
     QUESTIONS_TARGET,
-    REFINE_QUESTION,
     STARTING_QUESTIONS,
-    filosofia_de_inversion_builder,
-    filosofia_de_inversion_questions,
+    filosofia_builder_agent,
+    filosofia_questions_agent,
+    filosofia_refine_question_agent,
 )
 from app.core.config import CREATE_SESSION_TABLES, MESSAGES_TABLE, SESSIONS_TABLE, SESSION_DB_URL
 from app.utils.json_utils import pretty_json
@@ -26,21 +32,17 @@ except Exception:  # pragma: no cover
 
 class AgentService:
     """
-    Inputs (todos opcionales):
-    - portafolio_inversionista (JSON)
+    Model routing (performance + quality):
+    - gpt-4.1 → realiza las preguntas (Q1..Q5) y también pregunta de afinado post-filosofía.
+    - gpt-5.1 (reasoning high) → genera/actualiza la Filosofía de Inversión (WOW).
+
+    Inputs (opcionales):
     - portafolio_promedio (JSON)
+    - portafolio_inversionista (JSON)
     - mi_filosofia (texto)
-    - club_deals_concepts (definición/racional)
-    - club_deals_opinion (qué piensa el inversionista)
-
-    Backward-compat:
-    - club_deals_information (legacy) se interpreta como club_deals_concepts si no viene concepts.
-
-    Lógica:
-    1) Primera respuesta del sistema (inicio de chat): 1 pregunta hardcodeada (de lista) → cuenta como Q1/5
-    2) gpt-4.1 hace las siguientes 4 preguntas (una por mensaje) hasta completar 5
-    3) gpt-5.1 (reasoning high) genera la filosofía
-    4) Loop de refinamiento (gpt-5.1) hasta que el usuario responda “acepto”
+    - club_deals_concepts (texto)
+    - club_deals_opinion (texto)
+    - club_deals_information (legacy; se interpreta como concepts si concepts no viene)
     """
 
     def __init__(self) -> None:
@@ -61,6 +63,13 @@ class AgentService:
         if CREATE_SESSION_TABLES:
             await self._bootstrap.get_items(limit=1)
 
+        # crea tabla privada para sophistication (opcional pero recomendado)
+        try:
+            await ensure_sophistication_table(self._engine)
+        except Exception:
+            # si prefieres, loguea en vez de silenciar
+            pass
+
     def _make_session(self, session_id: str) -> SQLAlchemySession:
         if self._engine is None:
             raise RuntimeError("AgentService not initialized (engine missing). Did startup run?")
@@ -72,6 +81,9 @@ class AgentService:
             messages_table=MESSAGES_TABLE,
         )
 
+    # -------------------------
+    # Context seeding / updates
+    # -------------------------
     def _context_items(
         self,
         *,
@@ -81,31 +93,23 @@ class AgentService:
         club_deals_concepts: Optional[str],
         club_deals_opinion: Optional[str],
     ) -> List[TResponseInputItem]:
+        def txt(label: str, value: Optional[str]) -> str:
+            return f"{label}:\n" + (value if (value is not None and str(value).strip() != "") else "NO PROVISTA")
+
         content: List[Dict[str, Any]] = [
             {
                 "type": "input_text",
                 "text": "CONTEXTO — portafolio_promedio (JSON):\n"
-                + (pretty_json(portafolio_promedio) if portafolio_promedio else "NO PROVISTA"),
+                + (pretty_json(portafolio_promedio) if portafolio_promedio is not None else "NO PROVISTA"),
             },
             {
                 "type": "input_text",
                 "text": "CONTEXTO — portafolio_inversionista (JSON):\n"
-                + (pretty_json(portafolio_inversionista) if portafolio_inversionista else "NO PROVISTA"),
+                + (pretty_json(portafolio_inversionista) if portafolio_inversionista is not None else "NO PROVISTA"),
             },
-            {
-                "type": "input_text",
-                "text": "CONTEXTO — mi_filosofia (texto):\n" + (mi_filosofia if mi_filosofia else "NO PROVISTA"),
-            },
-            {
-                "type": "input_text",
-                "text": "CONTEXTO — club_deals_concepts:\n"
-                + (club_deals_concepts if club_deals_concepts else "NO PROVISTA"),
-            },
-            {
-                "type": "input_text",
-                "text": "CONTEXTO — club_deals_opinion:\n"
-                + (club_deals_opinion if club_deals_opinion else "NO PROVISTA"),
-            },
+            {"type": "input_text", "text": txt("CONTEXTO — mi_filosofia (texto)", mi_filosofia)},
+            {"type": "input_text", "text": txt("CONTEXTO — club_deals_concepts (texto)", club_deals_concepts)},
+            {"type": "input_text", "text": txt("CONTEXTO — club_deals_opinion (texto)", club_deals_opinion)},
         ]
         return [{"role": "user", "content": content}]
 
@@ -122,7 +126,6 @@ class AgentService:
         existing = await session.get_items(limit=1)
         if existing:
             return
-
         await session.add_items(
             self._context_items(
                 portafolio_promedio=portafolio_promedio,
@@ -133,42 +136,18 @@ class AgentService:
             )
         )
 
-    async def _append_context_updates(
-        self,
-        session: SQLAlchemySession,
-        *,
-        portafolio_promedio: Optional[Dict[str, Any]],
-        portafolio_inversionista: Optional[Dict[str, Any]],
-        mi_filosofia: Optional[str],
-        club_deals_concepts: Optional[str],
-        club_deals_opinion: Optional[str],
-    ) -> None:
-        """
-        Si en requests posteriores llegan valores no-None, los guardamos como UPDATE en memoria.
-        Esto permite que el usuario comparta portafolios/filosofía a mitad de flujo sin romper el contexto.
-        """
-        updates: List[str] = []
-        if portafolio_promedio is not None:
-            updates.append("UPDATE — portafolio_promedio (JSON):\n" + pretty_json(portafolio_promedio))
-        if portafolio_inversionista is not None:
-            updates.append("UPDATE — portafolio_inversionista (JSON):\n" + pretty_json(portafolio_inversionista))
-        if mi_filosofia is not None:
-            updates.append("UPDATE — mi_filosofia (texto):\n" + (mi_filosofia or "VACÍO"))
-        if club_deals_concepts is not None:
-            updates.append("UPDATE — club_deals_concepts:\n" + (club_deals_concepts or "VACÍO"))
-        if club_deals_opinion is not None:
-            updates.append("UPDATE — club_deals_opinion:\n" + (club_deals_opinion or "VACÍO"))
-
-        if not updates:
-            return
-
-        await session.add_items([{"role": "user", "content": "\n\n".join(updates)}])
-
-    # -------------------------
-    # Helpers de parsing (robustos a dict/obj + content como string/lista)
-    # -------------------------
     @staticmethod
-    def _get_field(item: Any, key: str) -> Any:
+    def _val_to_fingerprint(value: Any) -> str:
+        if value is None:
+            return ""
+        if isinstance(value, (dict, list)):
+            s = json.dumps(value, ensure_ascii=False, sort_keys=True)
+        else:
+            s = str(value)
+        return hashlib.sha256(s.encode("utf-8")).hexdigest()
+
+    @classmethod
+    def _get_field(cls, item: Any, key: str) -> Any:
         if item is None:
             return None
         if isinstance(item, dict):
@@ -232,6 +211,96 @@ class AgentService:
                 return None
         return None
 
+    def _safe_extract_text(self, items: List[Any], max_items: int = 60, max_chars_per_item: int = 1200) -> str:
+        """
+        Convierte historial en un 'transcript' compacto para el evaluator.
+        - Incluye roles
+        - Trunca mensajes largos (portafolios enormes)
+        """
+        items_sorted = self._sorted_items(items)[-max_items:]
+        lines: List[str] = []
+        for it in items_sorted:
+            role = self._get_field(it, "role") or "unknown"
+            txt = (self._extract_text_from_item(it) or "").strip()
+            if not txt:
+                continue
+            if len(txt) > max_chars_per_item:
+                txt = txt[:max_chars_per_item] + "…(truncado)"
+            lines.append(f"{role.upper()}: {txt}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _safe_json_loads(s: str) -> Dict[str, Any]:
+        """
+        Parse robusto por si el modelo mete whitespace o algo raro.
+        (igual el evaluator está instruido JSON-only)
+        """
+        s = (s or "").strip()
+        # si por error viniera con ```json ... ```
+        if s.startswith("```"):
+            s = s.strip("`")
+            s = s.replace("json", "", 1).strip()
+        return json.loads(s)
+
+    async def _evaluate_and_store_sophistication(self, session_id: str, session: SQLAlchemySession) -> None:
+        """
+        1) Lee historial de la sesión
+        2) Ejecuta evaluator (gpt-4.1, store=False) SIN session memory
+        3) Guarda payload en tabla privada
+        """
+        if self._engine is None:
+            return
+
+        history = await session.get_items(limit=250)
+        transcript = self._safe_extract_text(history)
+
+        # Prompt compacto: el evaluator ya tiene instructions, aquí solo le damos data
+        prompt = (
+            "EVALUA SOFISTICACIÓN del inversionista basado en este transcript.\n\n"
+            "TRANSCRIPT:\n"
+            f"{transcript}\n"
+        )
+
+        result = await Runner.run(
+            investor_sophistication_evaluator,
+            prompt,
+            # 👇 NO pasamos session=... para evitar que se escriba en el chat
+            run_config=RunConfig(
+                trace_metadata={
+                    "__trace_source__": "fastapi-service",
+                    "model_route": "sophistication_evaluator",
+                    "session_id": session_id,
+                }
+            ),
+        )
+
+        raw_out = result.final_output_as(str)
+        try:
+            payload = self._safe_json_loads(raw_out)
+        except Exception:
+            # Si falla parsing, no rompas el chat. Guarda algo mínimo:
+            payload = {
+                "level": "BASICO",
+                "score": 0.0,
+                "confidence": "baja",
+                "signals": ["parse_error"],
+                "evidence": [],
+                "notes": "No se pudo parsear JSON del evaluator.",
+            }
+
+        # ID determinístico simple (evita uuid)
+        row_id = hashlib.sha256(
+            (session_id + "|" + str(datetime.utcnow().timestamp())).encode("utf-8")
+        ).hexdigest()[:64]
+
+        await insert_sophistication(
+            self._engine,
+            row_id=row_id,
+            session_id=session_id,
+            payload=payload,
+            raw={"raw_output": raw_out, "payload": payload},
+        )
+
     @classmethod
     def _sorted_items(cls, items: List[Any]) -> List[Any]:
         scored: List[Tuple[float, int, Any]] = []
@@ -258,14 +327,16 @@ class AgentService:
         return None
 
     @classmethod
-    def _count_interview_questions(cls, items: List[Any]) -> int:
+    def _count_assistant_questions(cls, items: List[Any]) -> int:
         count = 0
         for it in cls._sorted_items(items):
             if cls._get_field(it, "role") != "assistant":
                 continue
             txt = (cls._extract_text_from_item(it) or "").strip()
-            if not txt or PHILOSOPHY_HEADER in txt:
+            if not txt:
                 continue
+            if PHILOSOPHY_HEADER in txt:
+                continue  # filosofía no cuenta como pregunta
             if txt.endswith("?"):
                 count += 1
         return count
@@ -279,47 +350,127 @@ class AgentService:
         m = cls._norm(message)
         if not m:
             return False
-        if m in {"acepto", "aceptado", "ok", "okey", "listo", "perfecto", "de acuerdo", "conforme"}:
+        if m in {"acepto", "aceptado"}:
             return True
-        if "acepto" in m and not any(w in m for w in ["pero", "cambia", "ajusta", "modifica", "corrige"]):
+        if m.startswith("acepto") and not any(w in m for w in ["pero", "cambia", "ajusta", "modifica", "corrige"]):
             return True
         return False
 
     @staticmethod
     def _pick_starting_question(session_id: str) -> str:
-        # determinístico por session_id para no "saltar" entre servidores
+        # determinístico por sesión para evitar "random" no reproducible
         h = hashlib.sha256(session_id.encode("utf-8")).digest()
         idx = int.from_bytes(h[:2], "big") % len(STARTING_QUESTIONS)
         return STARTING_QUESTIONS[idx]
 
-    async def _ensure_first_question(self, session: SQLAlchemySession, session_id: str) -> Optional[str]:
-        history = await session.get_items(limit=80)
-        if self._count_interview_questions(history) > 0:
-            return None
+    async def _append_user_message(self, session: SQLAlchemySession, message: str) -> None:
+        await session.add_items([{"role": "user", "content": [{"type": "input_text", "text": message}]}])
 
-        q = self._pick_starting_question(session_id)
-        # Guardamos la pregunta como mensaje assistant para que cuente como Q1/5.
-        await session.add_items([{"role": "assistant", "content": q}])
-        return q
+    async def _append_context_updates_if_any(
+        self,
+        session: SQLAlchemySession,
+        history: List[Any],
+        *,
+        portafolio_promedio: Optional[Dict[str, Any]],
+        portafolio_inversionista: Optional[Dict[str, Any]],
+        mi_filosofia: Optional[str],
+        club_deals_concepts: Optional[str],
+        club_deals_opinion: Optional[str],
+    ) -> None:
+        # Dedupe simple por fingerprint guardado en el texto del update
+        latest = self._last_context_fingerprints(history)
+
+        updates: List[Dict[str, Any]] = []
+
+        def maybe_add(key: str, label: str, value: Any, renderer) -> None:
+            if value is None:
+                return
+            fp = self._val_to_fingerprint(value)
+            if latest.get(key) == fp:
+                return
+            updates.append({"type": "input_text", "text": f"UPDATE — {label}:\n{renderer(value)}\n__fp__={fp}"})
+
+        maybe_add("portafolio_promedio", "portafolio_promedio (JSON)", portafolio_promedio, lambda v: pretty_json(v))
+        maybe_add(
+            "portafolio_inversionista",
+            "portafolio_inversionista (JSON)",
+            portafolio_inversionista,
+            lambda v: pretty_json(v),
+        )
+        maybe_add("mi_filosofia", "mi_filosofia (texto)", mi_filosofia, lambda v: str(v))
+        maybe_add("club_deals_concepts", "club_deals_concepts (texto)", club_deals_concepts, lambda v: str(v))
+        maybe_add("club_deals_opinion", "club_deals_opinion (texto)", club_deals_opinion, lambda v: str(v))
+
+        if updates:
+            await session.add_items([{"role": "user", "content": updates}])
+
+    @classmethod
+    def _last_context_fingerprints(cls, items: List[Any]) -> Dict[str, str]:
+        # Busca fingerprints en los UPDATE — ...
+        fps: Dict[str, str] = {}
+        for it in reversed(cls._sorted_items(items)):
+            if cls._get_field(it, "role") != "user":
+                continue
+            txt = cls._extract_text_from_item(it)
+            if "UPDATE —" not in txt or "__fp__=" not in txt:
+                continue
+
+            # Puede haber varios updates en un mismo content; extraemos todos
+            for block in txt.split("UPDATE —"):
+                if "__fp__=" not in block:
+                    continue
+                # detecta key por label
+                label_line = block.strip().splitlines()[0] if block.strip() else ""
+                fp = block.split("__fp__=")[-1].strip().splitlines()[0]
+                if "portafolio_promedio" in label_line and "portafolio_promedio" not in fps:
+                    fps["portafolio_promedio"] = fp
+                elif "portafolio_inversionista" in label_line and "portafolio_inversionista" not in fps:
+                    fps["portafolio_inversionista"] = fp
+                elif "mi_filosofia" in label_line and "mi_filosofia" not in fps:
+                    fps["mi_filosofia"] = fp
+                elif "club_deals_concepts" in label_line and "club_deals_concepts" not in fps:
+                    fps["club_deals_concepts"] = fp
+                elif "club_deals_opinion" in label_line and "club_deals_opinion" not in fps:
+                    fps["club_deals_opinion"] = fp
+
+            if len(fps) >= 5:
+                break
+        return fps
+
+    async def _run_refine_question(self, session: SQLAlchemySession) -> str:
+        with trace("Filosofia WOW (Refine Question)"):
+            rq = await Runner.run(
+                filosofia_refine_question_agent,
+                "Haz la pregunta de afinado ahora.",
+                session=session,
+                run_config=RunConfig(
+                    trace_metadata={
+                        "__trace_source__": "fastapi-service",
+                        "model_route": "refine_question",
+                    }
+                ),
+            )
+        return rq.final_output_as(str)
 
     async def chat(
         self,
         *,
         session_id: str,
         message: str,
-        portafolio_promedio: Optional[Dict[str, Any]],
-        portafolio_inversionista: Optional[Dict[str, Any]],
-        mi_filosofia: Optional[str],
-        club_deals_concepts: Optional[str],
-        club_deals_opinion: Optional[str],
-        # Backward-compat:
-        club_deals_information: Optional[str] = None,
+        portafolio_promedio: Optional[Dict[str, Any]] = None,
+        portafolio_inversionista: Optional[Dict[str, Any]] = None,
+        mi_filosofia: Optional[str] = None,
+        club_deals_concepts: Optional[str] = None,
+        club_deals_opinion: Optional[str] = None,
+        club_deals_information: Optional[str] = None,  # legacy
     ) -> str:
-        # Backward-compat mapping
+        # legacy mapping
         if club_deals_concepts is None and club_deals_information:
             club_deals_concepts = club_deals_information
 
         session = self._make_session(session_id)
+
+        # Seed inicial con lo que haya (todo opcional)
         await self._seed_context_if_empty(
             session,
             portafolio_promedio=portafolio_promedio,
@@ -329,9 +480,12 @@ class AgentService:
             club_deals_opinion=club_deals_opinion,
         )
 
-        # Si llegan updates en mensajes posteriores, los guardamos.
-        await self._append_context_updates(
+        history = await session.get_items(limit=250)
+
+        # Si el cliente manda inputs en mensajes posteriores, guárdalos como updates (dedupe)
+        await self._append_context_updates_if_any(
             session,
+            history,
             portafolio_promedio=portafolio_promedio,
             portafolio_inversionista=portafolio_inversionista,
             mi_filosofia=mi_filosofia,
@@ -339,88 +493,95 @@ class AgentService:
             club_deals_opinion=club_deals_opinion,
         )
 
-        # Primera pregunta hardcodeada (solo al inicio real del chat)
-        first_q = await self._ensure_first_question(session, session_id)
-        if first_q:
-            return first_q
-
-        history = await session.get_items(limit=250)
+        # Re-fetch por si se agregaron updates
+        history = await session.get_items(limit=300)
         last_philosophy = self._last_philosophy(history)
 
         # -------------------------
-        # Fase 2: Refinamiento (ya existe filosofía)
+        # Fase: refinamiento (ya hay filosofía)
         # -------------------------
         if last_philosophy:
+            # Guarda el mensaje del usuario aunque no usemos Runner (observabilidad)
+            await self._append_user_message(session, message)
+
             if self._user_accepts(message):
                 return "Perfecto. Queda como versión final:\n\n" + last_philosophy
 
             run_message = (
-                "Actualiza la filosofía anterior según estos cambios solicitados por el usuario. "
+                "Actualiza la filosofía anterior según los cambios solicitados por el usuario. "
                 "Mantén la estructura obligatoria y los requisitos WOW.\n\n"
                 f"CAMBIOS SOLICITADOS:\n{message}"
             )
-            agent = filosofia_de_inversion_builder
 
-            with trace("Filosofia WOW (FastAPI)"):
+            with trace("Filosofia WOW (Builder Edit)"):
                 result = await Runner.run(
-                    agent,
+                    filosofia_builder_agent,
                     run_message,
                     session=session,
                     run_config=RunConfig(
                         trace_metadata={
                             "__trace_source__": "fastapi-service",
-                            "workflow_id": "wf_693a02d72190819097a8a7b5234510f70851015287e3b178",
                             "model_route": "builder_edit",
                         }
                     ),
                 )
 
-            return result.final_output_as(str) + "\n\n" + REFINE_QUESTION
+            philosophy = result.final_output_as(str)
+            refine_q = await self._run_refine_question(session)
+            return philosophy + "\n\n" + refine_q
 
         # -------------------------
-        # Fase 1: Entrevista (5 preguntas en total, Q1 hardcode + Q2-Q5 con gpt-4.1)
+        # Fase: entrevista (Q1..Q5)
         # -------------------------
-        question_count = self._count_interview_questions(history)
+        question_count = self._count_assistant_questions(history)
 
-        # Respuesta del usuario a la 5ta → generar filosofía con gpt-5.1 high reasoning
+        # Q1: hardcode (de tu lista) — y SOLO UNA pregunta
+        if question_count == 0:
+            await self._append_user_message(session, message)
+            q1 = self._pick_starting_question(session_id)
+            await session.add_items([{"role": "assistant", "content": q1}])
+            return q1
+
+        # Si ya se hicieron 5 preguntas, el usuario está respondiendo a Q5 → generar filosofía
         if question_count >= QUESTIONS_TARGET:
+            await self._append_user_message(session, message)
             run_message = (
                 "Genera mi Filosofía de Inversión WOW final ahora, usando todo el contexto y las respuestas previas. "
                 "Entrega SOLO la filosofía completa con la estructura obligatoria."
             )
-            agent = filosofia_de_inversion_builder
 
-            with trace("Filosofia WOW (FastAPI)"):
+            with trace("Filosofia WOW (Builder Initial)"):
                 result = await Runner.run(
-                    agent,
+                    filosofia_builder_agent,
                     run_message,
                     session=session,
                     run_config=RunConfig(
                         trace_metadata={
                             "__trace_source__": "fastapi-service",
-                            "workflow_id": "wf_693a02d72190819097a8a7b5234510f70851015287e3b178",
                             "model_route": "builder_initial",
                         }
                     ),
                 )
 
-            return result.final_output_as(str) + "\n\n" + REFINE_QUESTION
+            philosophy = result.final_output_as(str)
+            refine_q = await self._run_refine_question(session)
+            return philosophy + "\n\n" + refine_q
 
-        # Aún faltan preguntas → seguir entrevistando con gpt-4.1
-        agent = filosofia_de_inversion_questions
-
-        with trace("Filosofia WOW (FastAPI)"):
+        # Si faltan preguntas: gpt-4.1 pregunta #2..#5 considerando inputs disponibles
+        with trace("Filosofia WOW (Questions)"):
             result = await Runner.run(
-                agent,
+                filosofia_questions_agent,
                 message,
                 session=session,
                 run_config=RunConfig(
                     trace_metadata={
                         "__trace_source__": "fastapi-service",
-                        "workflow_id": "wf_693a02d72190819097a8a7b5234510f70851015287e3b178",
                         "model_route": "questions",
                     }
                 ),
             )
+
+        # 👇 evaluar y guardar (interno)
+        await self._evaluate_and_store_sophistication(session_id, session)
 
         return result.final_output_as(str)
