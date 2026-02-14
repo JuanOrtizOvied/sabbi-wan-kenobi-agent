@@ -8,7 +8,7 @@ class ChatRequest(BaseModel):
 
     # ✅ Opcionales
     portafolio_promedio: Optional[List[Dict[str, Any]]] = Field(default=None, description="JSON con portafolio promedio (opcional).")
-    portafolio_inversionista: Optional[List[Dict[str, Any]]] = Field(default=None, description="JSON con portafolio del inversionista (opcional).")
+    portafolio_inversionista: Optional[Dict[str, Any]] = Field(default=None, description="JSON con portafolio del inversionista (opcional).")
     mi_filosofia: Optional[str] = Field(default=None, description="Texto libre del inversionista (opcional)")
 
     # ✅ Club Deals (ambos opcionales)
