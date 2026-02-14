@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, List
 from pydantic import BaseModel, Field
 
 
@@ -7,8 +7,8 @@ class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, description="User message (one turn)")
 
     # ✅ Opcionales
-    portafolio_promedio: Optional[Dict[str, Any]] = Field(default=None, description="JSON con portafolio promedio (opcional).")
-    portafolio_inversionista: Optional[Dict[str, Any]] = Field(default=None, description="JSON con portafolio del inversionista (opcional).")
+    portafolio_promedio: Optional[List[Dict[str, Any]]] = Field(default=None, description="JSON con portafolio promedio (opcional).")
+    portafolio_inversionista: Optional[List[Dict[str, Any]]] = Field(default=None, description="JSON con portafolio del inversionista (opcional).")
     mi_filosofia: Optional[str] = Field(default=None, description="Texto libre del inversionista (opcional)")
 
     # ✅ Club Deals (ambos opcionales)
