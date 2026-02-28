@@ -1,3 +1,4 @@
+import json
 from fastapi import APIRouter, HTTPException
 from app.api.informe_patrimonial.schemas import ChatRequest, ChatResponse
 from app.services.informe_patrimonial.agent_service import AgentService
@@ -10,7 +11,7 @@ agent = AgentService()
 def chat(req: ChatRequest) -> ChatResponse:
     try:
         out = agent.reply(
-            user_text=req.message,
+            json_data=req.json_data,
             previous_response_id=req.previous_response_id,
         )
         return ChatResponse(reply=out.text, response_id=out.response_id)

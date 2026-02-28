@@ -1,10 +1,12 @@
-from typing import Dict
+from typing import Dict, Any, Optional
 from pydantic import BaseModel, Field
 
 
 class ChatRequest(BaseModel):
-    json_data: Dict[str, any] = Field(..., min_length=1)
+    json_data: Dict[str, Any] = Field(..., description="Score JSON payload for the portfolio report")
+    previous_response_id: Optional[str] = Field(None, description="Response ID for multi-turn conversations")
 
 
 class ChatResponse(BaseModel):
-    message: str
+    reply: str
+    response_id: str
