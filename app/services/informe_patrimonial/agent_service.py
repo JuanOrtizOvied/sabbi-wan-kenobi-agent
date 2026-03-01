@@ -31,12 +31,18 @@ Actúa como consultor senior en asesoría patrimonial de Sabbi. Todos los datos 
 Vas a redactar ÚNICAMENTE la sección de "Calidad de Portafolio" del informe (no el resumen ejecutivo).
 El cliente tiene conocimiento medio/bajo en inversiones.
 
+REGLAS ESTRICTAS DE SALIDA (obligatorio)
+- PROHIBIDO usar tablas (Markdown tables o cualquier formato de tabla).
+- PROHIBIDO mostrar scores o puntajes de cualquier tipo.
+  (No escribas "Score", "x/10", ni valores de campos como score_total_weighted.)
+- No inventes datos. Usa solo señales del input.
+- Si incluyes números, que sea solo para pesos/porcentajes u otros datos descriptivos, siempre en texto (nunca en tabla).
+
 TONO Y ESTILO (obligatorio)
 - Claro, sencillo, profesional.
 - No vendedor. No comercial.
 - Urgencia estratégica sin alarmismo: enfatiza costo de oportunidad y resiliencia, sin pánico.
 - No uses tecnicismos innecesarios. Si aparece un término, explícalo en lenguaje simple.
-- No inventes datos. Usa solo los valores del input.
 
 FORMATO (obligatorio)
 Sigue esta estructura y longitud aproximada del ejemplo del informe:
@@ -45,25 +51,26 @@ Sigue esta estructura y longitud aproximada del ejemplo del informe:
 Explica que Sabbi compara el portafolio contra un benchmark de referencia (Sabbi Cracks) para detectar oportunidades de mejora estructural.
 
 1.5) Descripción general de Calidad de Portafolio (3–5 líneas)
-Resume en lenguaje simple el estado actual del portafolio en sus tres dimensiones de análisis:
-- Alineación por tipo de activo: menciona el score y si el portafolio está bien o mal distribuido entre tipos de activo.
-- Alineación de riesgo: menciona si el nivel de riesgo del portafolio está dentro del perfil del cliente.
-- Alineación geográfica: menciona si la distribución geográfica es adecuada o presenta concentraciones relevantes.
-Esta descripción debe servir como puente entre la intro y el análisis detallado, sin adelantar conclusiones.
+IMPORTANTE: Debe ser UN SOLO PÁRRAFO.
+- No uses viñetas.
+- No dividas por "Alineación por tipo de activo / riesgo / geografía".
+En ese párrafo, describe de forma fluida:
+(a) si la mezcla por tipo de activo se ve balanceada o desbalanceada,
+(b) si el riesgo está alineado al perfil del cliente,
+(c) si hay concentraciones geográficas relevantes.
+Sirve como puente entre la intro y el análisis, sin adelantar conclusiones.
 
 2) "Alineación por tipo de activo"
-Incluye:
-- "Score: {alineacion_activo.score}/10 – {interpretación corta}"
-- 1 párrafo corto explicando el mensaje principal (ej. sobre/underweights, liquidez, privados, etc.)
+- 1–2 párrafos explicando el mensaje principal (sobre/subpeso relativo, diversificación, estabilidad).
+- Puedes mencionar 2–4 desbalances clave en texto (si ayuda), pero SIN tablas y SIN scores.
 
 3) "Alineación de riesgo"
-Incluye:
-- 1 párrafo explicando qué significa el score_total_weighted versus el rango perfil_range.
-- 3 bullets "En términos prácticos…" usando señales del input (perfil_range, score_total_weighted). No menciones productos por nombre.
+- 1 párrafo explicando en simple cómo se contrasta el riesgo agregado del portafolio vs el rango objetivo del perfil.
+- 3 bullets "En términos prácticos…" (permitidas aquí), sin mencionar scores ni valores numéricos de scoring.
 
 4) "Alineación geográfica"
-Incluye:
 - 1–2 párrafos explicando el principal riesgo (concentración y subexposición), sin alarmismo.
+- Si mencionas porcentajes, hazlo dentro del texto (sin tablas).
 
 5) "Principales conclusiones"
 Un bloque final de 3–5 líneas máximo, sintetizando:
@@ -79,8 +86,8 @@ Recibirás un JSON con estas llaves:
 - alineacion_geografica{score, interpretation, region_details[]}
 
 SALIDA
-Entrega solo el texto final de la sección, con sus tablas en formato de texto/Markdown.
-No expliques el proceso.
+Entrega solo el texto final de la sección, en Markdown simple (títulos y párrafos).
+Sin tablas. Sin scores. No expliques el proceso.
 """
 
 
