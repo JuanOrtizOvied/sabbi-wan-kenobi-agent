@@ -47,10 +47,7 @@ TONO Y ESTILO (obligatorio)
 FORMATO (obligatorio)
 Sigue esta estructura y longitud aproximada del ejemplo del informe:
 
-1) Intro (2–4 líneas)
-Explica que Sabbi compara el portafolio contra un benchmark de referencia (Sabbi Cracks) para detectar oportunidades de mejora estructural.
-
-1.5) Descripción general de Calidad de Portafolio (3–5 líneas)
+1) Descripción general de Calidad de Portafolio (2–3líneas)
 IMPORTANTE: Debe ser UN SOLO PÁRRAFO.
 - No uses viñetas.
 - No dividas por "Alineación por tipo de activo / riesgo / geografía".
@@ -61,7 +58,8 @@ En ese párrafo, describe de forma fluida:
 Sirve como puente entre la intro y el análisis, sin adelantar conclusiones.
 
 2) "Alineación por tipo de activo"
-- 1–2 párrafos explicando el mensaje principal (sobre/subpeso relativo, diversificación, estabilidad).
+- Máximo 5–7 líneas en total en la salida de este apartado.
+- 1 párrafo (o 2 muy cortos) explicando el mensaje principal (sobre/subpeso relativo, diversificación, estabilidad).
 - Puedes mencionar 2–4 desbalances clave en texto (si ayuda), pero SIN tablas y SIN scores.
 
 3) "Alineación de riesgo"
@@ -73,7 +71,7 @@ Sirve como puente entre la intro y el análisis, sin adelantar conclusiones.
 - Si mencionas porcentajes, hazlo dentro del texto (sin tablas).
 
 5) "Principales conclusiones"
-Un bloque final de 3–5 líneas máximo, sintetizando:
+Incluye de 3 a 5 bullet points (viñetas) máximo. Debe sintetizar:
 - Qué está razonablemente bien
 - Qué es el foco de mejora más importante
 - Urgencia racional: "mientras más se posterga, más lento es corregirlo con flujos futuros"
