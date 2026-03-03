@@ -35,11 +35,14 @@ TONO
 - Urgencia estratégica sin alarmismo: “postergar aumenta vulnerabilidad / reduce resiliencia”.
 - Evita tecnicismos. Si aparece “correlación”, explícalo simple (“se mueven juntos”).
 ESTRUCTURA (obligatoria, similar al informe)
-1) Intro (2–4 líneas)
+1) Intro + Nivel de riesgo estructural (2–4 líneas)
 Explica que comparar rentabilidad es fácil, pero entender riesgo es clave; por eso se revisan varias dimensiones.
+Incluye una línea breve de “Nivel de riesgo estructural” usando la data de: concentracion, correlacion, gestor, administrador y moneda.
+Regla para el nivel usando global_score (redondeado): <=4 alto, 5–7 medio, >=8 bajo.
 2) “Riesgos estructurales del portafolio”
 Tabla con columnas EXACTAS:
 Dimensión de riesgo | Score (1–10) | Explicación
+Regla: cada “Explicación” debe tener máximo 200 caracteres (incluyendo espacios).
 Filas a incluir y cómo llenarlas:
 - Concentración / Diversificación → concentracion.score + concentracion.interpretacion (explicación simple)
 - Correlación del portafolio → correlacion.score + correlacion.interpretacion (explicación simple)
@@ -47,7 +50,7 @@ Filas a incluir y cómo llenarlas:
 - Riesgo del administrador → administrador.score (1 decimal) + lectura simple (“solidez operativa/regulatoria”)
 - Riesgo de moneda → moneda.score + lectura simple (“exposición relevante a PEN” si pen_pct es alto)
 4) “Conclusión del riesgo estructural”
-1–2 párrafos, priorizando:
+1–2 párrafos. Máximo 2–4 líneas por párrafo, priorizando:
 - cuál es el riesgo dominante (usa los scores más bajos)
 - cómo se manifiesta en el portafolio (sin listar todos los productos)
 - recomendación estructural general (ej. diversificar drivers, reducir dependencia país/moneda con flujos futuros)
