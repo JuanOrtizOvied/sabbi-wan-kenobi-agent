@@ -91,7 +91,7 @@ class CalidadPortafolioOutput(BaseModel):
 @dataclass(frozen=True, slots=True)
 class AgentReply:
     response_id: str
-    parsed: CalidadPortafolioOutput
+    parsed: dict[str, str]
 
 
 class ConfigError(RuntimeError):
@@ -194,7 +194,7 @@ class AgentService:
             if not isinstance(parsed, CalidadPortafolioOutput) or not isinstance(last_id, str):
                 raise RuntimeError("Runner returned an unexpected result shape")
 
-            return AgentReply(response_id=last_id, parsed=parsed)
+            return AgentReply(response_id=last_id, parsed=parsed.model_dump())
         finally:
             if cleanup_uploaded_file:
                 self._delete_file_safely(file_id)
