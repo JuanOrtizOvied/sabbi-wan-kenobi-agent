@@ -9,6 +9,7 @@ from typing import Any, Final, Mapping, Optional
 from agents import Agent, ModelSettings, Runner
 from openai import OpenAI
 from openai.types.shared.reasoning import Reasoning
+from pydantic import BaseModel, Field
 
 from app.core.config import settings
 
@@ -20,45 +21,99 @@ UPLOAD_FILENAME: Final[str] = "score_data.json"
 UPLOAD_MIMETYPE: Final[str] = "application/json"
 UPLOAD_PURPOSE: Final[str] = "assistants"
 
+# ---------------------------------------------------------------------------
+# ReportLab rich-text formatting reference (for the model)
+# ---------------------------------------------------------------------------
+# Use these inline tags/conventions when producing each text field:
+#
+#   <b>text</b>          → Bold
+#   <i>text</i>          → Italic / cursive
+#   <u>text</u>          → Underline
+#   <br/>                → Line break
+#   • item               → Bullet point  (use literal "•" character)
+#   <title>text</title>  → Section title  (rendered as bold + larger font)
+#   <strike>text</strike>→ Strikethrough  (use sparingly)
+#
+# Rules:
+#   - Wrap risk-level labels in <b>…</b>  (e.g. <b>Riesgo Medio</b>)
+#   - Wrap dimension names in <i>…</i> the first time they appear
+#   - Use "• " bullets for enumerated recommendations or risk factors
+#   - Separate logical paragraphs with <br/><br/>
+#   - conclusions field: open with a <title> line summarising the section
+# ---------------------------------------------------------------------------
+
 USER_INSTRUCTION: Final[str] = (
-    "Aquí están los datos del portafolio del cliente. "
-    "Redacta la sección 'Riesgo estructural' siguiendo "
-    "exactamente el formato y tono indicados en las instrucciones."
+    "Aquí están los datos del portafolio del cliente adjuntos en el archivo JSON.\n\n"
+    "Tu tarea es redactar ÚNICAMENTE la sección 'Riesgo estructural del portafolio' "
+    "siguiendo exactamente el formato, tono y estructura indicados en las instrucciones del sistema.\n\n"
+    "FORMATO DE SALIDA OBLIGATORIO:\n"
+    "Devuelve un objeto JSON con exactamente estos seis campos:\n"
+    "  • explicacion_concentracion   — explicación de la dimensión Concentración/Diversificación\n"
+    "  • explicacion_correlacion      — explicación de la dimensión Correlación del portafolio\n"
+    "  • explicacion_riesgo_gestor    — explicación de la dimensión Riesgo del gestor\n"
+    "  • explicacion_riesgo_administrador — explicación de la dimensión Riesgo del administrador\n"
+    "  • explicacion_moneda           — explicación de la dimensión Riesgo de moneda\n"
+    "  • conclusions                  — conclusión integrada del riesgo estructural (1–2 párrafos)\n\n"
+    "REGLAS DE FORMATO PARA EL TEXTO (ReportLab rich-text):\n"
+    "  • Usa <b>…</b> para negritas (ej. nivel de riesgo, scores relevantes).\n"
+    "  • Usa <i>…</i> para itálicas/cursiva (ej. nombres de dimensiones la primera vez).\n"
+    "  • Usa <u>…</u> para subrayado (ej. alertas o recomendaciones clave).\n"
+    "  • Usa el carácter '• ' para bullets cuando enumeres factores o recomendaciones.\n"
+    "  • Usa <br/><br/> para separar párrafos dentro de un mismo campo.\n"
+    "  • En el campo conclusions, abre con una línea de título en <b><u>…</u></b>.\n"
+    "  • Máximo 200 caracteres por campo de explicación (sin contar etiquetas HTML).\n"
+    "  • No inventes datos; usa solo los valores del JSON adjunto.\n"
+    "  • No expliques el proceso ni agregues campos adicionales."
 )
 
 PERSONALITY_PROMPT: Final[str] = """\
 Actúa como analista senior de riesgo estructural en Sabbi, comunicando a clientes con conocimiento medio/bajo.
-Vas a redactar ÚNICAMENTE la sección “Riesgo estructural del portafolio”.
+Vas a redactar ÚNICAMENTE la sección "Riesgo estructural del portafolio".
 No calcules nada. No inventes datos. Usa solo el input.
+
 TONO
 - Claro, profesional, no vendedor.
-- Urgencia estratégica sin alarmismo: “postergar aumenta vulnerabilidad / reduce resiliencia”.
-- Evita tecnicismos. Si aparece “correlación”, explícalo simple (“se mueven juntos”).
-ESTRUCTURA (obligatoria, similar al informe)
-1) Intro + Nivel de riesgo estructural (2–4 líneas)
-Explica que comparar rentabilidad es fácil, pero entender riesgo es clave; por eso se revisan varias dimensiones.
-Incluye una línea breve de “Nivel de riesgo estructural” usando la data de: concentracion, correlacion, gestor, administrador y moneda.
-Regla para el nivel usando global_score (redondeado): <=4 alto, 5–7 medio, >=8 bajo.
-2) “Riesgos estructurales del portafolio”
-Tabla con columnas EXACTAS:
-Dimensión de riesgo | Score (1–10) | Explicación
-Regla: cada “Explicación” debe tener máximo 200 caracteres (incluyendo espacios).
-Filas a incluir y cómo llenarlas:
-- Concentración / Diversificación → concentracion.score + concentracion.interpretacion (explicación simple)
-- Correlación del portafolio → correlacion.score + correlacion.interpretacion (explicación simple)
-- Riesgo del gestor → gestor.score (redondear a 1 decimal) + lectura simple (“calidad promedio de quién toma decisiones”)
-- Riesgo del administrador → administrador.score (1 decimal) + lectura simple (“solidez operativa/regulatoria”)
-- Riesgo de moneda → moneda.score + lectura simple (“exposición relevante a PEN” si pen_pct es alto)
-4) “Conclusión del riesgo estructural”
-1–2 párrafos. Máximo 2–4 líneas por párrafo, priorizando:
-- cuál es el riesgo dominante (usa los scores más bajos)
-- cómo se manifiesta en el portafolio (sin listar todos los productos)
-- recomendación estructural general (ej. diversificar drivers, reducir dependencia país/moneda con flujos futuros)
-- urgencia racional sin pánico
-REGLAS
+- Urgencia estratégica sin alarmismo: "postergar aumenta vulnerabilidad / reduce resiliencia".
+- Evita tecnicismos. Si aparece "correlación", explícalo simple ("se mueven juntos").
+
+CONTENIDO POR CAMPO
+Cada campo del JSON de salida corresponde a una dimensión de la tabla de riesgos:
+
+explicacion_concentracion
+  Basada en concentracion.score y concentracion.interpretacion.
+  Explica de forma simple qué tan diversificado está el portafolio.
+
+explicacion_correlacion
+  Basada en correlacion.score y correlacion.interpretacion.
+  Explica si los activos "se mueven juntos" y qué implica eso.
+
+explicacion_riesgo_gestor
+  Basada en gestor.score (redondear a 1 decimal).
+  Lectura simple sobre la calidad promedio de quién toma las decisiones de inversión.
+
+explicacion_riesgo_administrador
+  Basada en administrador.score (redondear a 1 decimal).
+  Lectura simple sobre solidez operativa y regulatoria de quienes custodian el portafolio.
+
+explicacion_moneda
+  Basada en moneda.score y moneda.pen_pct.
+  Si pen_pct es alto, indicar exposición relevante a PEN y sus implicancias.
+
+conclusions
+  1–2 párrafos cortos (máx. 2–4 líneas c/u) que integren:
+  - el riesgo dominante (scores más bajos = mayor riesgo)
+  - cómo se manifiesta en el portafolio (sin listar productos)
+  - recomendación estructural general (diversificar drivers, reducir dependencia moneda/país con flujos futuros)
+  - urgencia racional sin pánico
+  Regla del nivel global usando global_score (redondeado): <=4 → <b>Alto</b>, 5–7 → <b>Medio</b>, >=8 → <b>Bajo</b>.
+  Abre con una línea resumen del nivel: ej. "Nivel de riesgo estructural: <b>Medio</b>".
+
+REGLAS GENERALES
 - No listar la matriz de correlación ni números internos de la matriz.
-- No mencionar nombres de productos salvo que sea imprescindible (preferir “bloques” o “exposiciones”).
+- No mencionar nombres de productos salvo que sea imprescindible (preferir "bloques" o "exposiciones").
 - No proponer ventas forzadas.
+- Respetar siempre el formato ReportLab indicado en USER_INSTRUCTION.
+
 INPUT
 Recibirás un JSON con:
 - global_score
@@ -67,15 +122,65 @@ Recibirás un JSON con:
 - gestor{score}
 - administrador{score}
 - moneda{score, pen_pct}
+
 SALIDA
-Solo el texto final de la sección + la tabla en Markdown.
-No expliques el proceso.
+Devuelve ÚNICAMENTE el objeto JSON con los seis campos definidos. Sin texto adicional.
 """
 
 
+# ---------------------------------------------------------------------------
+# Structured output schema
+# ---------------------------------------------------------------------------
+
+class RiesgoEstructuralOutput(BaseModel):
+    """Structured output for the 'Riesgo estructural del portafolio' section."""
+
+    explicacion_concentracion: str = Field(
+        description=(
+            "Explicación de la dimensión Concentración/Diversificación. "
+            "Máx. 200 caracteres de texto plano. Puede contener etiquetas ReportLab."
+        )
+    )
+    explicacion_correlacion: str = Field(
+        description=(
+            "Explicación de la dimensión Correlación del portafolio. "
+            "Máx. 200 caracteres de texto plano. Puede contener etiquetas ReportLab."
+        )
+    )
+    explicacion_riesgo_gestor: str = Field(
+        description=(
+            "Explicación de la dimensión Riesgo del gestor. "
+            "Máx. 200 caracteres de texto plano. Puede contener etiquetas ReportLab."
+        )
+    )
+    explicacion_riesgo_administrador: str = Field(
+        description=(
+            "Explicación de la dimensión Riesgo del administrador. "
+            "Máx. 200 caracteres de texto plano. Puede contener etiquetas ReportLab."
+        )
+    )
+    explicacion_moneda: str = Field(
+        description=(
+            "Explicación de la dimensión Riesgo de moneda. "
+            "Máx. 200 caracteres de texto plano. Puede contener etiquetas ReportLab."
+        )
+    )
+    conclusions: str = Field(
+        description=(
+            "Conclusión integrada del riesgo estructural: 1–2 párrafos con nivel global, "
+            "riesgo dominante, cómo se manifiesta y recomendación estructural. "
+            "Formato ReportLab; abrir con línea de título en <b><u>…</u></b>."
+        )
+    )
+
+
+# ---------------------------------------------------------------------------
+# Reply container
+# ---------------------------------------------------------------------------
+
 @dataclass(frozen=True, slots=True)
 class AgentReply:
-    text: str
+    output: dict[str, str]
     response_id: str
 
 
@@ -83,11 +188,15 @@ class ConfigError(RuntimeError):
     """Raised when required configuration is missing."""
 
 
+# ---------------------------------------------------------------------------
+# Service
+# ---------------------------------------------------------------------------
+
 class AgentService:
     """
     Service wrapper around an Agents SDK Agent that:
       - uploads JSON input as a file attachment
-      - runs the agent
+      - runs the agent with a structured output type (RiesgoEstructuralOutput)
       - optionally deletes the uploaded file
     """
 
@@ -116,6 +225,7 @@ class AgentService:
             model_settings=ModelSettings(
                 reasoning=Reasoning(effort="high", summary="auto"),
             ),
+            output_type=RiesgoEstructuralOutput,
         )
 
     @staticmethod
@@ -156,11 +266,14 @@ class AgentService:
         cleanup_uploaded_file: bool = True,
     ) -> AgentReply:
         """
-        Runs the agent and returns the generated 'Calidad de Portafolio' section.
+        Runs the agent and returns the structured 'Riesgo estructural' section.
 
         previous_response_id:
           - None for the first message
           - The last response.id for follow-up turns
+
+        Returns an AgentReply whose `.output` is a validated RiesgoEstructuralOutput
+        instance with ReportLab-formatted rich text in every field.
         """
         if not isinstance(json_data, Mapping):
             raise TypeError("json_data must be a mapping (dict-like)")
@@ -173,12 +286,17 @@ class AgentService:
                 previous_response_id=previous_response_id,
             )
 
-            final_text = getattr(result, "final_output", None)
+            structured_output = getattr(result, "final_output", None)
             last_id = getattr(result, "last_response_id", None)
-            if not isinstance(final_text, str) or not isinstance(last_id, str):
-                raise RuntimeError("Runner returned an unexpected result shape")
 
-            return AgentReply(text=final_text, response_id=last_id)
+            if not isinstance(structured_output, RiesgoEstructuralOutput):
+                raise RuntimeError(
+                    f"Runner returned unexpected final_output type: {type(structured_output)}"
+                )
+            # if not isinstance(last_id, str):
+            #     raise RuntimeError("Runner returned an unexpected last_response_id type")
+
+            return AgentReply(output=structured_output.model_dump(), response_id=last_id)
         finally:
             if cleanup_uploaded_file:
                 self._delete_file_safely(file_id)
