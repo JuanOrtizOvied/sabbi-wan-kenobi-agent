@@ -54,14 +54,17 @@ USER_INSTRUCTION: Final[str] = (
     "  • explicacion_riesgo_administrador — explicación de la dimensión Riesgo del administrador\n"
     "  • explicacion_moneda           — explicación de la dimensión Riesgo de moneda\n"
     "  • conclusions                  — conclusión integrada del riesgo estructural (1–2 párrafos)\n\n"
+    "REGLAS PARA LOS CAMPOS DE EXPLICACIÓN (explicacion_*):\n"
+    "  • PROHIBIDO mencionar o mostrar el score numérico (ej. '7', '6.5', '8/10') dentro del texto.\n"
+    "    El score se presenta por separado en la tabla; la explicación solo describe la situación en lenguaje natural.\n"
+    "  • Máximo 200 caracteres de texto plano por campo (sin contar etiquetas HTML).\n\n"
     "REGLAS DE FORMATO PARA EL TEXTO (ReportLab rich-text):\n"
-    "  • Usa <b>…</b> para negritas (ej. nivel de riesgo, scores relevantes).\n"
+    "  • Usa <b>…</b> para negritas (ej. nivel de riesgo, términos clave).\n"
     "  • Usa <i>…</i> para itálicas/cursiva (ej. nombres de dimensiones la primera vez).\n"
     "  • Usa <u>…</u> para subrayado (ej. alertas o recomendaciones clave).\n"
     "  • Usa el carácter '• ' para bullets cuando enumeres factores o recomendaciones.\n"
     "  • Usa <br/><br/> para separar párrafos dentro de un mismo campo.\n"
     "  • En el campo conclusions, abre con una línea de título en <b><u>…</u></b>.\n"
-    "  • Máximo 200 caracteres por campo de explicación (sin contar etiquetas HTML).\n"
     "  • No inventes datos; usa solo los valores del JSON adjunto.\n"
     "  • No expliques el proceso ni agregues campos adicionales."
 )
@@ -77,26 +80,28 @@ TONO
 - Evita tecnicismos. Si aparece "correlación", explícalo simple ("se mueven juntos").
 
 CONTENIDO POR CAMPO
-Cada campo del JSON de salida corresponde a una dimensión de la tabla de riesgos:
+Cada campo del JSON de salida corresponde a una dimensión de la tabla de riesgos.
+REGLA CRÍTICA: ningún campo de explicación (explicacion_*) debe mencionar ni mostrar
+el valor numérico del score. Describe la situación únicamente en lenguaje natural.
 
 explicacion_concentracion
-  Basada en concentracion.score y concentracion.interpretacion.
+  Basada en concentracion.interpretacion (NO menciones el score numérico).
   Explica de forma simple qué tan diversificado está el portafolio.
 
 explicacion_correlacion
-  Basada en correlacion.score y correlacion.interpretacion.
+  Basada en correlacion.interpretacion (NO menciones el score numérico).
   Explica si los activos "se mueven juntos" y qué implica eso.
 
 explicacion_riesgo_gestor
-  Basada en gestor.score (redondear a 1 decimal).
+  Basada en gestor.score solo para inferir el nivel cualitativo (NO lo menciones en el texto).
   Lectura simple sobre la calidad promedio de quién toma las decisiones de inversión.
 
 explicacion_riesgo_administrador
-  Basada en administrador.score (redondear a 1 decimal).
+  Basada en administrador.score solo para inferir el nivel cualitativo (NO lo menciones en el texto).
   Lectura simple sobre solidez operativa y regulatoria de quienes custodian el portafolio.
 
 explicacion_moneda
-  Basada en moneda.score y moneda.pen_pct.
+  Basada en moneda.pen_pct para determinar la exposición (NO menciones el score numérico).
   Si pen_pct es alto, indicar exposición relevante a PEN y sus implicancias.
 
 conclusions
@@ -180,7 +185,7 @@ class RiesgoEstructuralOutput(BaseModel):
 
 @dataclass(frozen=True, slots=True)
 class AgentReply:
-    output: dict[str, str]
+    output: RiesgoEstructuralOutput
     response_id: str
 
 
@@ -293,10 +298,10 @@ class AgentService:
                 raise RuntimeError(
                     f"Runner returned unexpected final_output type: {type(structured_output)}"
                 )
-            # if not isinstance(last_id, str):
-            #     raise RuntimeError("Runner returned an unexpected last_response_id type")
+            if not isinstance(last_id, str):
+                raise RuntimeError("Runner returned an unexpected last_response_id type")
 
-            return AgentReply(output=structured_output.model_dump(), response_id=last_id)
+            return AgentReply(output=structured_output, response_id=last_id)
         finally:
             if cleanup_uploaded_file:
                 self._delete_file_safely(file_id)
