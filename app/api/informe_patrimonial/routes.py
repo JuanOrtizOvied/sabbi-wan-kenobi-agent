@@ -41,6 +41,6 @@ def chat(req: ChatRequest) -> ChatResponse:
             json_data=req.json_data,
             previous_response_id=req.previous_response_id,
         )
-        return ChatResponse(reply=out.text, response_id=out.response_id)
+        return ChatResponse(reply=out.result, response_id=out.response_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
