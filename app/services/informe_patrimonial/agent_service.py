@@ -9,6 +9,7 @@ from typing import Any, Final, Mapping, Optional
 from agents import Agent, ModelSettings, Runner
 from openai import OpenAI
 from openai.types.shared.reasoning import Reasoning
+from pydantic import BaseModel
 
 from app.core.config import settings
 
@@ -47,34 +48,28 @@ TONO Y ESTILO (obligatorio)
 FORMATO (obligatorio)
 Sigue esta estructura y longitud aproximada del ejemplo del informe:
 
-1) Descripción general de Calidad de Portafolio (2–3líneas)
-IMPORTANTE: Debe ser UN SOLO PÁRRAFO.
+1) calidad_portafolio_description — Descripción general (2–3 líneas, UN SOLO PÁRRAFO)
 - No uses viñetas.
-- No dividas por "Alineación por tipo de activo / riesgo / geografía".
-En ese párrafo, describe de forma fluida:
-(a) si la mezcla por tipo de activo se ve balanceada o desbalanceada,
-(b) si el riesgo está alineado al perfil del cliente,
-(c) si hay concentraciones geográficas relevantes.
-Sirve como puente entre la intro y el análisis, sin adelantar conclusiones.
+- Describe de forma fluida: mezcla por tipo de activo, alineación de riesgo al perfil, concentraciones geográficas.
+- Sirve como puente entre la intro y el análisis, sin adelantar conclusiones.
 
-2) "Alineación por tipo de activo"
-- Máximo 5–7 líneas en total en la salida de este apartado.
-- 1 párrafo (o 2 muy cortos) explicando el mensaje principal (sobre/subpeso relativo, diversificación, estabilidad).
-- Puedes mencionar 2–4 desbalances clave en texto (si ayuda), pero SIN tablas y SIN scores.
+2) alineacion_activo_description — Alineación por tipo de activo
+- Máximo 5–7 líneas.
+- 1 párrafo (o 2 muy cortos) con el mensaje principal (sobre/subpeso, diversificación, estabilidad).
+- Puedes mencionar 2–4 desbalances clave en texto, SIN tablas y SIN scores.
 
-3) "Alineación de riesgo"
-- 1 párrafo explicando en simple cómo se contrasta el riesgo agregado del portafolio vs el rango objetivo del perfil.
-- 3 bullets "En términos prácticos…" (permitidas aquí), sin mencionar scores ni valores numéricos de scoring.
+3) alineacion_riesgo_description — Alineación de riesgo
+- 1 párrafo explicando el contraste entre el riesgo agregado del portafolio y el rango objetivo del perfil.
+- 3 bullets "En términos prácticos…" (permitidos aquí), sin mencionar scores ni valores numéricos de scoring.
 
-4) "Alineación geográfica"
+4) alineacion_geografica_description — Alineación geográfica
 - 1–2 párrafos explicando el principal riesgo (concentración y subexposición), sin alarmismo.
 - Si mencionas porcentajes, hazlo dentro del texto (sin tablas).
 
-5) "Principales conclusiones"
-Incluye de 3 a 5 bullet points (viñetas) máximo. Debe sintetizar:
-- Qué está razonablemente bien
-- Qué es el foco de mejora más importante
-- Urgencia racional: "mientras más se posterga, más lento es corregirlo con flujos futuros"
+5) conclusions — Principales conclusiones
+- 3 a 5 bullet points máximo.
+- Sintetiza: qué está razonablemente bien, cuál es el foco de mejora más importante,
+  y urgencia racional: "mientras más se posterga, más lento es corregirlo con flujos futuros".
 
 INPUT
 Recibirás un JSON con estas llaves:
@@ -82,17 +77,21 @@ Recibirás un JSON con estas llaves:
 - alineacion_activo{score, asset_details[]}
 - alineacion_riesgo{score, score_total_weighted, perfil_riesgo, perfil_range{min,max}}
 - alineacion_geografica{score, interpretation, region_details[]}
-
-SALIDA
-Entrega solo el texto final de la sección, en Markdown simple (títulos y párrafos).
-Sin tablas. Sin scores. No expliques el proceso.
 """
+
+
+class CalidadPortafolioOutput(BaseModel):
+    calidad_portafolio_description: str
+    alineacion_activo_description: str
+    alineacion_riesgo_description: str
+    alineacion_geografica_description: str
+    conclusions: str
 
 
 @dataclass(frozen=True, slots=True)
 class AgentReply:
-    text: str
     response_id: str
+    parsed: CalidadPortafolioOutput
 
 
 class ConfigError(RuntimeError):
@@ -103,7 +102,7 @@ class AgentService:
     """
     Service wrapper around an Agents SDK Agent that:
       - uploads JSON input as a file attachment
-      - runs the agent
+      - runs the agent with a structured output_type
       - optionally deletes the uploaded file
     """
 
@@ -132,6 +131,7 @@ class AgentService:
             model_settings=ModelSettings(
                 reasoning=Reasoning(effort="high", summary="auto"),
             ),
+            output_type=CalidadPortafolioOutput,
         )
 
     @staticmethod
@@ -189,12 +189,12 @@ class AgentService:
                 previous_response_id=previous_response_id,
             )
 
-            final_text = getattr(result, "final_output", None)
+            parsed = result.final_output
             last_id = getattr(result, "last_response_id", None)
-            if not isinstance(final_text, str) or not isinstance(last_id, str):
+            if not isinstance(parsed, CalidadPortafolioOutput) or not isinstance(last_id, str):
                 raise RuntimeError("Runner returned an unexpected result shape")
 
-            return AgentReply(text=final_text, response_id=last_id)
+            return AgentReply(response_id=last_id, parsed=parsed)
         finally:
             if cleanup_uploaded_file:
                 self._delete_file_safely(file_id)

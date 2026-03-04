@@ -8,5 +8,5 @@ class ChatRequest(BaseModel):
 
 
 class ChatResponse(BaseModel):
-    reply: str
+    reply: Dict[str, Any] = Field(..., description="Score JSON payload for the portfolio report")
     response_id: str
