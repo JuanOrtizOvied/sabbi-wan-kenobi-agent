@@ -45,31 +45,45 @@ TONO Y ESTILO (obligatorio)
 - Urgencia estratégica sin alarmismo: enfatiza costo de oportunidad y resiliencia, sin pánico.
 - No uses tecnicismos innecesarios. Si aparece un término, explícalo en lenguaje simple.
 
-FORMATO (obligatorio)
-Sigue esta estructura y longitud aproximada del ejemplo del informe:
+FORMATO DE MARCADO (obligatorio)
+Cada campo del JSON de salida es un string con marcado ReportLab XML.
+Usa ÚNICAMENTE estas etiquetas cuando sea apropiado para el contenido:
 
-1) calidad_portafolio_description — Descripción general (2–3 líneas, UN SOLO PÁRRAFO)
-- No uses viñetas.
-- Describe de forma fluida: mezcla por tipo de activo, alineación de riesgo al perfil, concentraciones geográficas.
-- Sirve como puente entre la intro y el análisis, sin adelantar conclusiones.
+  <b>texto</b>          → negrita (usa para términos clave o énfasis fuerte)
+  <i>texto</i>          → cursiva/itálica (usa para términos técnicos o citas)
+  <u>texto</u>          → subrayado (usa para datos importantes puntuales)
+  <bullet>•</bullet>    → viñeta (usa SOLO en campos que requieren lista; ver abajo)
+  [TITLE]texto[/TITLE]  → título de sección (NO usar dentro de los campos; el título lo pone el sistema)
 
-2) alineacion_activo_description — Alineación por tipo de activo
-- Máximo 5–7 líneas.
-- 1 párrafo (o 2 muy cortos) con el mensaje principal (sobre/subpeso, diversificación, estabilidad).
-- Puedes mencionar 2–4 desbalances clave en texto, SIN tablas y SIN scores.
+Reglas de marcado:
+- No anidar más de dos etiquetas (ej. <b><i>texto</i></b> está bien; triple anidado no).
+- No usar <bullet> en calidad_portafolio_description ni en los campos de alineación (solo párrafos).
+- Sí usar <bullet>•</bullet> al inicio de cada ítem en alineacion_riesgo_description (los 3 bullets prácticos)
+  y en conclusions (los 3–5 bullets finales).
+- Para saltos de línea dentro de un campo usa el carácter literal \\n.
+- No uses Markdown (sin **, __, #, -, *). Solo el marcado XML descrito arriba.
 
-3) alineacion_riesgo_description — Alineación de riesgo
-- 1 párrafo explicando el contraste entre el riesgo agregado del portafolio y el rango objetivo del perfil.
-- 3 bullets "En términos prácticos…" (permitidos aquí), sin mencionar scores ni valores numéricos de scoring.
+ESTRUCTURA DE CAMPOS (obligatorio)
+Sigue esta estructura de contenido:
 
-4) alineacion_geografica_description — Alineación geográfica
-- 1–2 párrafos explicando el principal riesgo (concentración y subexposición), sin alarmismo.
-- Si mencionas porcentajes, hazlo dentro del texto (sin tablas).
+1) calidad_portafolio_description — UN SOLO PÁRRAFO, 2–3 líneas.
+   Describe fluidamente: mezcla de activos, alineación de riesgo al perfil, concentraciones geográficas.
+   Sin viñetas. Sin adelantar conclusiones.
 
-5) conclusions — Principales conclusiones
-- 3 a 5 bullet points máximo.
-- Sintetiza: qué está razonablemente bien, cuál es el foco de mejora más importante,
-  y urgencia racional: "mientras más se posterga, más lento es corregirlo con flujos futuros".
+2) alineacion_activo_description — 1 párrafo (o 2 muy cortos), máximo 5–7 líneas.
+   Mensaje principal: sobre/subpeso relativo, diversificación, estabilidad.
+   Puedes mencionar 2–4 desbalances clave en texto (sin listas).
+
+3) alineacion_riesgo_description — 1 párrafo de contraste de riesgo agregado vs rango del perfil,
+   seguido de exactamente 3 ítems con <bullet>•</bullet> que empiecen con "En términos prácticos…".
+   Separa el párrafo introductorio de los bullets con \\n.
+
+4) alineacion_geografica_description — 1–2 párrafos sobre concentración y subexposición geográfica.
+   Sin alarmismo. Porcentajes en texto.
+
+5) conclusions — Exactamente 3 a 5 ítems, cada uno comenzando con <bullet>•</bullet>.
+   Sintetiza: qué está razonablemente bien, cuál es el foco principal de mejora,
+   y urgencia racional ("mientras más se posterga, más lento es corregirlo con flujos futuros").
 
 INPUT
 Recibirás un JSON con estas llaves:
@@ -104,6 +118,9 @@ class AgentService:
       - uploads JSON input as a file attachment
       - runs the agent with a structured output_type
       - optionally deletes the uploaded file
+
+    Each string value in AgentReply.parsed contains ReportLab XML markup
+    (<b>, <i>, <u>, <bullet>) ready to be consumed by reportlab_utils.field_to_flowables().
     """
 
     def __init__(
@@ -173,6 +190,10 @@ class AgentService:
     ) -> AgentReply:
         """
         Runs the agent and returns the generated 'Calidad de Portafolio' section.
+
+        AgentReply.parsed is a dict[str, str] where each value is a string
+        containing ReportLab XML markup. Pass each value through
+        reportlab_utils.field_to_flowables() to obtain PDF-ready flowables.
 
         previous_response_id:
           - None for the first message
