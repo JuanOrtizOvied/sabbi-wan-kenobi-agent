@@ -185,7 +185,7 @@ class RiesgoEstructuralOutput(BaseModel):
 
 @dataclass(frozen=True, slots=True)
 class AgentReply:
-    output: RiesgoEstructuralOutput
+    output: dict[str, str]
     response_id: str
 
 
@@ -301,7 +301,7 @@ class AgentService:
             if not isinstance(last_id, str):
                 raise RuntimeError("Runner returned an unexpected last_response_id type")
 
-            return AgentReply(output=structured_output, response_id=last_id)
+            return AgentReply(output=structured_output.model_dump(), response_id=last_id)
         finally:
             if cleanup_uploaded_file:
                 self._delete_file_safely(file_id)
