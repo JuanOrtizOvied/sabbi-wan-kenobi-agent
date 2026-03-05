@@ -21,11 +21,25 @@ UPLOAD_FILENAME: Final[str] = "score_data.json"
 UPLOAD_MIMETYPE: Final[str] = "application/json"
 UPLOAD_PURPOSE: Final[str] = "assistants"
 
-USER_INSTRUCTION: Final[str] = (
-    "Aquí están los datos del portafolio del cliente. "
-    "Redacta la sección 'Calidad de Portafolio' siguiendo "
-    "exactamente el formato y tono indicados en las instrucciones."
-)
+USER_INSTRUCTION: Final[str] = """\
+A continuación se adjunta el archivo JSON con los datos del portafolio del cliente.
+
+El archivo contiene las siguientes llaves que debes usar:
+- global_score
+- alineacion_activo: score, asset_details[]
+- alineacion_riesgo: score, score_total_weighted, perfil_riesgo, perfil_range {min, max}
+- alineacion_geografica: score, interpretation, region_details[]
+
+Redacta ÚNICAMENTE la sección "Calidad de Portafolio" completando los 5 campos del output estructurado:
+1. calidad_portafolio_description — un solo párrafo, 2–3 líneas, sin viñetas ni scores.
+2. alineacion_activo_description — 1–2 párrafos cortos, desbalances clave en texto.
+3. alineacion_riesgo_description — párrafo de contraste + exactamente 3 bullets prácticos.
+4. alineacion_geografica_description — 1–2 párrafos sobre concentración y subexposición.
+5. conclusions — exactamente 3 a 5 bullets de síntesis final.
+
+Respeta todas las reglas de marcado ReportLab (<b>, <i>, <u>, <bullet>•</bullet>, \\n) \
+y las restricciones del sistema: sin tablas, sin scores numéricos, sin Markdown.
+"""
 
 PERSONALITY_PROMPT: Final[str] = """\
 Actúa como consultor senior en asesoría patrimonial de Sabbi. Todos los datos están en el JSON adjunto.
