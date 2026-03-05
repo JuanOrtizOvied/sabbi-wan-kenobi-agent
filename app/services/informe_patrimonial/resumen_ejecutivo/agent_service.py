@@ -15,16 +15,34 @@ from app.core.config import settings
 log = logging.getLogger(__name__)
 
 DEFAULT_MODEL: Final[str] = "gpt-5.2"
-AGENT_NAME: Final[str] = "RiesgoEstructuralAgent"
+AGENT_NAME: Final[str] = "ResumenEjecutivoAgent"
 UPLOAD_FILENAME: Final[str] = "score_data.json"
 UPLOAD_MIMETYPE: Final[str] = "application/json"
 UPLOAD_PURPOSE: Final[str] = "assistants"
 
-USER_INSTRUCTION: Final[str] = (
-    "Aquí están los datos del portafolio del cliente. "
-    "Redacta la sección 'Calidad de Portafolio' siguiendo "
-    "exactamente el formato y tono indicados en las instrucciones."
-)
+USER_INSTRUCTION: Final[str] = """\
+A continuación se adjunta el archivo JSON con los datos del portafolio del cliente.
+
+El archivo contiene los siguientes campos que debes utilizar para redactar el Resumen Ejecutivo:
+- Nombre del cliente
+- Perfil de riesgo
+- Patrimonio total
+- Patrimonio invertible
+- Número de instrumentos analizados
+- Score total del portafolio
+- Score de calidad de portafolio (pilar 60%)
+- Score de riesgo estructural (pilar 40%)
+- Principales concentraciones detectadas
+- Alineaciones por tipo de activo
+- Nivel de liquidez
+- Observaciones relevantes en calidad de portafolio
+- Observaciones relevantes en riesgo estructural
+
+Redacta el Resumen Ejecutivo completo siguiendo EXACTAMENTE la estructura de 8 secciones, \
+el tono y las reglas de marcado ReportLab definidos en las instrucciones del sistema.
+No omitas ninguna sección. No agregues secciones adicionales. \
+No uses Markdown. Solo etiquetas <b>, <i> y <br/>.
+"""
 
 PERSONALITY_PROMPT: Final[str] = """\
 Actúa como consultor senior en asesoría patrimonial institucional. 
