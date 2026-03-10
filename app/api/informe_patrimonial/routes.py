@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from app.api.informe_patrimonial.schemas import ChatRequest, ChatResponse
-from app.services.informe_patrimonial.agent_service import AgentService
+from app.services.informe_patrimonial.calidad_portafolio.agent_service import AgentService
 from app.services.informe_patrimonial.riesgo_estructural.agent_service import AgentService as StructuralRiskAgentService
 from app.services.informe_patrimonial.resumen_ejecutivo.agent_service import AgentService as ResumenEjecutivoAgentService
 
