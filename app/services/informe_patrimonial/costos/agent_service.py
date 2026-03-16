@@ -25,8 +25,11 @@ USER_INSTRUCTION: Final[str] = """Analiza el archivo JSON del portafolio adjunto
 
 El reporte debe incluir:
 
-1. **Agrupación por comisiones** (`grouped_output`):
-   - Agrupa los productos por `comision_sin_igv`
+1. **Agrupación inteligente** (`grouped_output`):
+   - Agrupa productos por `comision_sin_igv`
+   - Para cada grupo, crea un nombre descriptivo basado en los nombres de los productos
+   - El nombre debe reflejar las características comunes de los productos del grupo
+   - NO uses nombres genéricos como "comision 0.0065" o "grupo 1"
    - Calcula el monto total por grupo
    - Calcula el costo como: `costo = total_amount * fee` (solo si la comisión es numérica)
    - Lista cada producto con su nombre y monto dentro del grupo
@@ -38,18 +41,24 @@ El reporte debe incluir:
    - **Formato**: Usa etiquetas ReportLab para dar formato al texto:
      * `<b>texto</b>` para negritas
      * `<i>texto</i>` para cursivas
-     * `<br/>` para saltos de línea entre párrafos
+     * `<br/><br/>` para saltos de línea entre párrafos
 
 3. **Oportunidades de mejora** (`oportunidades_mejora`):
    - Un solo párrafo en español, máximo 5 líneas
    - Enfócate en recomendaciones accionables para optimizar costos
    - **Formato**: Usa etiquetas ReportLab (`<b>`, `<i>`, viñetas si es necesario)
 
-**Reglas de agrupación**:
-- Si `comision_sin_igv` es `"0"` Y el producto es cash/ahorro/liquidez → Grupo: `Cash / ahorro`
-- Si `comision_sin_igv` es `"0"` Y el producto NO es cash/ahorro/liquidez → Grupo: `Inversiones sin comisión (no cash)`
+**Reglas para nombres de grupo**:
+- Analiza los nombres de productos en cada grupo (misma comisión)
+- Identifica patrones comunes: proveedores, tipos, características compartidas
+- Crea nombres descriptivos basados en esos patrones
+- Si es un solo producto, usa su nombre directamente
+- Si los productos comparten proveedor o características, refleja eso en el nombre
+
+**Casos especiales**:
+- Si `comision_sin_igv` es `"0"` Y los productos son ahorro/cash/liquidez → nombre: `"Cash / ahorro"`
+- Si `comision_sin_igv` es `"0"` Y los productos NO son ahorro → nombre: `"Inversiones sin comisión (no cash)"`
 - Si `comision_sin_igv` no es numérica → `costo = null` (no calcular)
-- Agrupa el resto por el valor exacto de `comision_sin_igv`
 
 **Importante**: No inventes datos que no estén en el archivo JSON."""
 
@@ -59,34 +68,113 @@ Tu misión es procesar datos de portafolio y generar reportes ejecutivos claros,
 
 **Responsabilidades**:
 1. Analizar la estructura de comisiones del portafolio
-2. Identificar concentraciones de costos y oportunidades de ahorro
-3. Generar insights ejecutivos con formato profesional
-4. Proporcionar recomendaciones basadas en datos
+2. Agrupar productos de manera inteligente
+3. Crear nombres de grupo descriptivos basados en la información de los productos
+4. Identificar concentraciones de costos y oportunidades de ahorro
+5. Generar insights ejecutivos con formato profesional
+6. Proporcionar recomendaciones basadas en datos
+
+**Lógica de agrupación y nomenclatura**:
+
+1. **Agrupa por comisión**: Todos los productos con el mismo `comision_sin_igv` van juntos
+
+2. **Analiza cada grupo**: 
+   - Examina los nombres de los productos en el grupo
+   - Identifica patrones comunes: proveedores recurrentes, características similares, categorías
+   - Busca términos compartidos en los nombres
+
+3. **Crea nombres descriptivos**:
+   - Si todos los productos comparten un proveedor (ej: "Credicorp Capital", "Sabadell"), inclúyelo en el nombre
+   - Si hay características comunes visibles en los nombres (ej: tickers bursátiles, instrumentos similares), descríbelas
+   - Si es un solo producto, usa su nombre completo o una versión resumida
+   - Si los productos son diversos pero tienen algo en común, encuentra el denominador común
+
+   **Ejemplos de buenos nombres**:
+   - Si todos tienen "- Credicorp Capital" o son tickers → "Acciones en bolsa / Credicorp Capital"
+   - Si todos son de "Sabadell" y tienen "FUND" → "Bonos Sabadell Investment Grade"
+   - Si hay un solo producto "Sabadell - JPMORGAN SOXX PPN" → "Nota estructurada Sabadell - JPMORGAN SOXX PPN"
+   - Si es solo "Sabbi Oportunidad" → "Sabbi Oportunidad"
+
+   **Evita nombres genéricos**:
+   - ❌ "comision 0.0065"
+   - ❌ "grupo 1"
+   - ❌ "productos varios"
+
+4. **Casos especiales para comisión "0"**:
+   - Si los productos tienen "Ahorro", "Cash", o "Liquidez" en el nombre → `"Cash / ahorro"`
+   - Si NO tienen esas palabras → `"Inversiones sin comisión (no cash)"`
+
+5. **Reglas de cálculo**:
+   - `total_amount` = suma de todos los amounts de productos en el grupo
+   - `fee` = el valor de comision_sin_igv (como string)
+   - `costo` = total_amount * fee (como número) SI fee es numérico
+   - `costo` = null SI fee NO es numérico (ej: "Clase A 1.75% - Clase B 1.05%")
+   - Para fee = "0": costo = 0.0
 
 **Formato de salida**:
 - Usa SIEMPRE el esquema estructurado `PortfolioReport`
 - Los campos de texto (`lectura_ejecutiva`, `oportunidades_mejora`) DEBEN usar formato ReportLab:
-  * Negritas: `<b>texto</b>` para conceptos clave
+  * Negritas: `<b>texto</b>` para conceptos clave, cifras importantes
   * Cursivas: `<i>texto</i>` para énfasis o términos técnicos
   * Saltos de párrafo: `<br/><br/>` entre párrafos
-  * Ejemplo: `<b>Concentración alta:</b> El <i>80% de los costos</i> proviene de productos con comisión del 2.5%<br/><br/>La diversificación...`
+  * Ejemplo: `<b>Concentración alta:</b> El <i>42% de los costos</i> proviene del grupo con comisión del <b>0.65%</b><br/><br/>La diversificación...`
 
 **Principios**:
 - Precisión: Solo reporta datos que estén en el archivo
-- Claridad: Usa lenguaje ejecutivo directo
+- Inteligencia: Deriva nombres descriptivos de la información real de los productos
+- Claridad: Los nombres deben ser inmediatamente comprensibles
 - Acción: Enfócate en insights que generen valor
 - Formato: Respeta estrictamente el esquema y las etiquetas ReportLab
 
 **Restricciones**:
+- NO uses nombres genéricos como "comision X.XX" o "grupo N"
 - NO inventes datos faltantes
 - NO agregues campos adicionales al esquema
 - NO proporciones explicaciones fuera de los campos definidos
-- SIEMPRE valida que los cálculos sean correctos antes de responder"""
+- SIEMPRE valida que los cálculos sean correctos antes de responder
+- SIEMPRE deriva nombres de grupo de la información real de los productos"""
 
 
 # ---------------------------------------------------------------------------
 # Structured output schema
 # ---------------------------------------------------------------------------
+# Example output with intelligent group names derived from product information:
+# [
+#   {
+#     "group_name": "Acciones en bolsa / Credicorp Capital",  # Derived from provider in product names
+#     "total_amount": 259891.0,
+#     "fee": "0.0065",
+#     "costo": 1689.29,
+#     "products": [
+#       {"name": "SNJUANC1", "amount": 91469.0},
+#       {"name": "BAP - Credicorp Capital", "amount": 58545.0},
+#       ...
+#     ]
+#   },
+#   {
+#     "group_name": "Bonos Sabadell Investment Grade",  # Derived from common characteristics
+#     "total_amount": 118686.85,
+#     "fee": "0.007",
+#     "costo": 830.81,
+#     "products": [...]
+#   },
+#   {
+#     "group_name": "Sabbi Oportunidad",  # Single product - use product name
+#     "total_amount": 100000.0,
+#     "fee": "Clase A 1.75% - Clase B 1.05%",
+#     "costo": null,
+#     "products": [...]
+#   },
+#   {
+#     "group_name": "Cash / ahorro",  # Special case: fee=0 with savings products
+#     "total_amount": 199922.41,
+#     "fee": "0",
+#     "costo": 0.0,
+#     "products": [...]
+#   }
+# ]
+# ---------------------------------------------------------------------------
+
 class ProductAmount(BaseModel):
     """Individual product with its amount within a fee group."""
     name: str = Field(description="Product name")
@@ -94,8 +182,14 @@ class ProductAmount(BaseModel):
 
 
 class FeeGroup(BaseModel):
-    """Portfolio products grouped by commission/fee rate."""
-    group_name: str = Field(description="Descriptive name for this fee group")
+    """Portfolio products grouped by fee with names derived from product information."""
+    group_name: str = Field(
+        description=(
+            "Descriptive name derived from analyzing product names in the group. "
+            "Should reflect common characteristics like shared providers, product types, "
+            "or individual product names. NOT generic names like 'comision 0.0065'."
+        )
+    )
     total_amount: float = Field(description="Sum of all product amounts in this group")
     fee: str = Field(description="Fee/commission rate as string (e.g., '2.5', '0', 'N/A')")
     costo: float | None = Field(
@@ -107,14 +201,18 @@ class FeeGroup(BaseModel):
 
 
 class PortfolioReport(BaseModel):
-    """Complete portfolio cost analysis report."""
+    """Complete portfolio cost analysis report with intelligent grouping."""
     grouped_output: list[FeeGroup] = Field(
-        description="Portfolio grouped by comision_sin_igv with aggregated amounts and costs."
+        description=(
+            "Portfolio grouped by fee with descriptive names derived from product information. "
+            "Group names reflect common characteristics found in product names (providers, types, etc.) "
+            "rather than generic labels like 'comision X.XX'."
+        )
     )
     lectura_ejecutiva: str = Field(
         description=(
             "Executive summary in Spanish. Maximum 3 short paragraphs (3 lines each). "
-            "Must use ReportLab formatting tags: <b>bold</b>, <i>italic</i>, <br/> for line breaks. "
+            "Must use ReportLab formatting tags: <b>bold</b>, <i>italic</i>, <br/><br/> for paragraph breaks. "
             "Highlights cost concentration, fee structure insights, and key findings."
         )
     )
@@ -153,11 +251,14 @@ class AgentService:
     Workflow:
       1. Uploads JSON portfolio data as a file attachment
       2. Runs the agent with structured output (PortfolioReport)
-      3. Returns validated output with ReportLab-formatted text fields
-      4. Optionally cleans up the uploaded file
+      3. Agent groups products by fee and derives descriptive names from product information
+      4. Returns validated output with ReportLab-formatted text fields
+      5. Optionally cleans up the uploaded file
 
-    The agent groups products by fee, calculates costs, and generates
-    executive insights with proper ReportLab markup for PDF rendering.
+    The agent analyzes product names to create descriptive group labels
+    (e.g., "Acciones en bolsa / Credicorp Capital" instead of "comision 0.0065"),
+    calculates costs per group, and generates executive insights with proper
+    ReportLab markup for PDF rendering.
     """
 
     def __init__(
