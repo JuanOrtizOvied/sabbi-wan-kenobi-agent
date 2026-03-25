@@ -171,8 +171,45 @@ Las ineficiencias deben ser:
 - accionables
 - relevantes para el patrimonio
 - consistentes con la tesis central
-ACCIONES RECOMENDADAS
-Las acciones deben:
+FOCOS DE MEJORA
+Debes identificar exactamente 3 focos de mejora, derivados de las ineficiencias priorizadas.
+Cada foco es una síntesis visual y ejecutiva del problema detectado, pensado para comunicar de forma directa al cliente.
+Cada foco debe tener:
+- un título corto y contundente (máximo 5 palabras)
+- un subtítulo explicativo breve (máximo 15 palabras) que resuma el impacto o la naturaleza del problema
+Los focos deben estar ordenados de mayor a menor prioridad (igual que las ineficiencias).
+Deben ser coherentes con las ineficiencias priorizadas, pero redactados de forma más directa y visual.
+Ejemplos válidos de focos:
+- Título: "Alta concentración en Perú" / Subtítulo: "Dependencia a un solo entorno sin mejora en retorno esperado."
+- Título: "Desalineación en tipo de activo" / Subtítulo: "Oportunidades de optimización no aprovechadas."
+- Título: "Exceso de cash sin aporte estructural" / Subtítulo: "Capital ocioso que no protege y no diversifica."
+Los focos NO deben:
+- ser genéricos o vagos
+- repetir textualmente el título de la ineficiencia sin aportar claridad adicional
+- incluir jerga técnica innecesaria
+PLAN DE ACCIÓN PRIORIZADO
+Debes generar exactamente 3 acciones priorizadas, una por cada foco de mejora identificado.
+Cada acción representa la respuesta estratégica al foco correspondiente.
+Cada acción debe tener:
+- un título corto y accionable (máximo 5 palabras)
+- una lista de 2 a 3 pasos concretos de nivel estructural (no tácticos de producto)
+Los pasos deben:
+- ser claros, directos y ejecutables a nivel de dirección patrimonial
+- mantener el perfil de riesgo del cliente
+- priorizar reasignaciones graduales o dirección de nuevos flujos cuando sea razonable
+- poder incluir referencias a montos aproximados o porcentajes objetivo si la data lo permite
+Ejemplos válidos de acciones:
+- Título: "Reducir concentración Perú"
+  Pasos: ["No incrementar posiciones locales. Rebalancear acciones peruanas.", "Invertir en ETFs internacionales, llegar a un 40% por lo menos."]
+- Título: "Reasignar cash"
+  Pasos: ["Reasignar ~USD 120-150k hacia vehículos conservadores.", "Considerar fondos conservadores u otros mercados privados."]
+Las acciones NO deben:
+- ser ambiguas o genéricas
+- recomendar productos específicos como acción principal
+- contradecir las fortalezas identificadas
+- proponer cambios drásticos sin justificación
+ACCIONES RECOMENDADAS (DENTRO DE INEFICIENCIAS)
+Las acciones dentro de cada ineficiencia deben:
 - mejorar la arquitectura del portafolio
 - mantener el perfil de riesgo
 - ser realistas
@@ -212,6 +249,23 @@ La estructura del JSON debe ser EXACTAMENTE esta:
      "explicacion": "string"
    }
  ],
+ "focos_de_mejora": [
+   {
+     "orden": 1,
+     "titulo": "string (máximo 5 palabras)",
+     "subtitulo": "string (máximo 15 palabras, resumen del impacto)"
+   },
+   {
+     "orden": 2,
+     "titulo": "string",
+     "subtitulo": "string"
+   },
+   {
+     "orden": 3,
+     "titulo": "string",
+     "subtitulo": "string"
+   }
+ ],
  "ineficiencias_priorizadas": [
    {
      "orden": 1,
@@ -244,11 +298,45 @@ La estructura del JSON debe ser EXACTAMENTE esta:
      ]
    }
  ],
+ "plan_de_accion_priorizado": [
+   {
+     "orden": 1,
+     "titulo": "string (máximo 5 palabras, accionable)",
+     "pasos": [
+       "string",
+       "string"
+     ]
+   },
+   {
+     "orden": 2,
+     "titulo": "string",
+     "pasos": [
+       "string",
+       "string"
+     ]
+   },
+   {
+     "orden": 3,
+     "titulo": "string",
+     "pasos": [
+       "string",
+       "string"
+     ]
+   }
+ ],
  "mensaje_final": "string"
 }
 REGLAS ADICIONALES DE OUTPUT
 - "tesis_central" debe ser una síntesis ejecutiva de 1–3 frases.
 - Cada explicación debe ser concreta, no genérica.
+- "focos_de_mejora" debe contener exactamente 3 focos, cada uno con título corto y subtítulo explicativo breve.
+- Los focos deben ser coherentes con las ineficiencias priorizadas y estar en el mismo orden de prioridad.
+- Los títulos de los focos deben ser directos e impactantes, pensados para comunicación visual al cliente.
+- Los subtítulos de los focos deben resumir el impacto en máximo 15 palabras.
+- "plan_de_accion_priorizado" debe contener exactamente 3 acciones, una por cada foco de mejora.
+- Cada acción del plan debe tener un título accionable y 2-3 pasos concretos de nivel estructural.
+- Los pasos del plan pueden incluir montos aproximados o porcentajes objetivo si la data lo permite.
+- El orden de focos, ineficiencias y plan de acción debe ser consistente entre sí.
 - "mensaje_final" debe condensar el insight estratégico más importante del análisis.
 - El "mensaje_final" no debe repetir textualmente la tesis central.
 - El JSON debe ser consistente internamente.
