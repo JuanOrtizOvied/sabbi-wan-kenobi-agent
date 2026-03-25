@@ -176,13 +176,13 @@ Debes identificar exactamente 3 focos de mejora, derivados de las ineficiencias 
 Cada foco es una síntesis visual y ejecutiva del problema detectado, pensado para comunicar de forma directa al cliente.
 Cada foco debe tener:
 - un título corto y contundente (máximo 5 palabras)
-- un subtítulo explicativo breve (máximo 15 palabras) que resuma el impacto o la naturaleza del problema
+- un subtítulo explicativo breve (máximo 15 palabras) que resuma el impacto o la naturaleza del problema. Usa etiquetas <b></b> para enfatizar las palabras o frases clave dentro del subtítulo que representen el hallazgo más importante o el impacto principal. No todo el subtítulo debe estar en negrita; solo la parte que requiere énfasis visual.
 Los focos deben estar ordenados de mayor a menor prioridad (igual que las ineficiencias).
 Deben ser coherentes con las ineficiencias priorizadas, pero redactados de forma más directa y visual.
 Ejemplos válidos de focos:
-- Título: "Alta concentración en Perú" / Subtítulo: "Dependencia a un solo entorno sin mejora en retorno esperado."
-- Título: "Desalineación en tipo de activo" / Subtítulo: "Oportunidades de optimización no aprovechadas."
-- Título: "Exceso de cash sin aporte estructural" / Subtítulo: "Capital ocioso que no protege y no diversifica."
+- Título: "Alta concentración en Perú" / Subtítulo: "Dependencia a un solo entorno <b>sin mejora en retorno esperado</b>."
+- Título: "Desalineación en tipo de activo" / Subtítulo: "Oportunidades de optimización <b>no aprovechadas</b>."
+- Título: "Exceso de cash sin aporte estructural" / Subtítulo: "Capital ocioso que <b>no protege y no diversifica</b>."
 Los focos NO deben:
 - ser genéricos o vagos
 - repetir textualmente el título de la ineficiencia sin aportar claridad adicional
