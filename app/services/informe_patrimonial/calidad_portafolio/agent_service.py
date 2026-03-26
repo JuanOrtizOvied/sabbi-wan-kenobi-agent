@@ -21,8 +21,34 @@ UPLOAD_FILENAME: Final[str] = "score_data.json"
 UPLOAD_MIMETYPE: Final[str] = "application/json"
 UPLOAD_PURPOSE: Final[str] = "assistants"
 
+# ---------------------------------------------------------------------------
+# Global-score interpretive ranges
+# ---------------------------------------------------------------------------
+SCORE_RANGES: Final[list[tuple[float, float, str]]] = [
+    (1.0,  2.0, "Estructura Frágil"),
+    (3.0,  4.0, "Estructura Vulnerable"),
+    (5.0,  6.0, "Estructura funcional, no optimizada"),
+    (7.0,  8.0, "Estructura sólida y eficiente"),
+    (9.0, 10.0, "Estructura altamente optimizada"),
+]
+
 USER_INSTRUCTION: Final[str] = """\
 A continuación se adjunta el archivo JSON con los datos del portafolio del cliente.
+
+METODOLOGÍA DE CÁLCULO DEL SCORE GLOBAL
+El score global de calidad de portafolio se calcula como un promedio ponderado de tres dimensiones:
+  • Alineación por tipo de activo  — peso 40%
+  • Alineación de riesgo            — peso 40%
+  • Alineación geográfica           — peso 20%
+
+RANGOS DE INTERPRETACIÓN DEL SCORE GLOBAL (campo global_score)
+  • 1 – 2   → Estructura Frágil: el portafolio presenta debilidades importantes en su composición.
+  • 3 – 4   → Estructura Vulnerable: existen riesgos estructurales que requieren atención prioritaria.
+  • 5 – 6   → Estructura funcional, no optimizada: la base es razonable pero hay espacio relevante de mejora.
+  • 7 – 8   → Estructura sólida y eficiente: el portafolio está bien construido con ajustes menores posibles.
+  • 9 – 10  → Estructura altamente optimizada: la composición refleja de forma consistente el perfil del cliente.
+Usa estos rangos para calibrar el tono de tu redacción (más positivo o más urgente) \
+pero NUNCA menciones los valores numéricos del score ni estos rangos en el texto de salida.
 
 El archivo contiene las siguientes llaves que debes usar:
 - global_score
@@ -30,12 +56,18 @@ El archivo contiene las siguientes llaves que debes usar:
 - alineacion_riesgo: score, score_total_weighted, perfil_riesgo, perfil_range {min, max}
 - alineacion_geografica: score, interpretation, region_details[]
 
-Redacta ÚNICAMENTE la sección "Calidad de Portafolio" completando los 5 campos del output estructurado:
+Redacta ÚNICAMENTE la sección "Calidad de Portafolio" completando los 8 campos del output estructurado:
 1. calidad_portafolio_description — un solo párrafo, 2–3 líneas, sin viñetas ni scores.
 2. alineacion_activo_description — 1–2 párrafos cortos, desbalances clave en texto.
-3. alineacion_riesgo_description — párrafo de contraste + exactamente 3 bullets prácticos.
-4. alineacion_geografica_description — 1–2 párrafos sobre concentración y subexposición.
-5. conclusions — exactamente 3 a 5 bullets de síntesis final.
+3. alineacion_activo_title — título breve que resuma el diagnóstico redactado en alineacion_activo_description.
+4. alineacion_riesgo_description — párrafo de contraste + exactamente 3 bullets prácticos.
+5. alineacion_riesgo_title — título breve que resuma el diagnóstico redactado en alineacion_riesgo_description.
+6. alineacion_geografica_description — 1–2 párrafos sobre concentración y subexposición.
+7. alineacion_geografica_title — título breve que resuma el diagnóstico redactado en alineacion_geografica_description.
+8. conclusions — exactamente 3 a 5 bullets de síntesis final.
+
+IMPORTANTE: Redacta PRIMERO cada *_description y DESPUÉS genera el *_title correspondiente \
+como un titular corto que sintetice lo que ya escribiste en la descripción.
 
 Respeta todas las reglas de marcado ReportLab (<b>, <i>, <u>, <bullet>•</bullet>, \\n) \
 y las restricciones del sistema: sin tablas, sin scores numéricos, sin Markdown.
@@ -46,10 +78,19 @@ Actúa como consultor senior en asesoría patrimonial de Sabbi. Todos los datos 
 Vas a redactar ÚNICAMENTE la sección de "Calidad de Portafolio" del informe (no el resumen ejecutivo).
 El cliente tiene conocimiento medio/bajo en inversiones.
 
+METODOLOGÍA DE CÁLCULO (contexto interno — NO incluir en la salida)
+El score global se obtiene como promedio ponderado:
+  Alineación por tipo de activo (40%) + Alineación de riesgo (40%) + Alineación geográfica (20%).
+Rangos de interpretación del score global:
+  1–2 → Estructura Frágil | 3–4 → Estructura Vulnerable | 5–6 → Estructura funcional, no optimizada | 7–8 → Estructura sólida y eficiente | 9–10 → Estructura altamente optimizada.
+Usa estos rangos para calibrar el tono (más positivo o más urgente), \
+pero NUNCA menciones valores numéricos del score, ponderaciones ni rangos en el texto de salida.
+
 REGLAS ESTRICTAS DE SALIDA (obligatorio)
 - PROHIBIDO usar tablas (Markdown tables o cualquier formato de tabla).
 - PROHIBIDO mostrar scores o puntajes de cualquier tipo.
   (No escribas "Score", "x/10", ni valores de campos como score_total_weighted.)
+- PROHIBIDO mencionar los pesos porcentuales de cada dimensión (40%, 40%, 20%).
 - No inventes datos. Usa solo señales del input.
 - Si incluyes números, que sea solo para pesos/porcentajes u otros datos descriptivos, siempre en texto (nunca en tabla).
 
@@ -76,9 +117,30 @@ Reglas de marcado:
   y en conclusions (los 3–5 bullets finales).
 - Para saltos de línea dentro de un campo usa el carácter literal \\n.
 - No uses Markdown (sin **, __, #, -, *). Solo el marcado XML descrito arriba.
+- Los campos *_title NO llevan marcado XML; son texto plano corto.
 
 ESTRUCTURA DE CAMPOS (obligatorio)
 Sigue esta estructura de contenido:
+
+ORDEN DE REDACCIÓN: Escribe PRIMERO cada *_description y DESPUÉS el *_title correspondiente.
+El título debe ser un resumen fiel de lo que ya redactaste en la descripción.
+
+REGLA DE TÍTULOS POR DIMENSIÓN
+Cada campo *_title debe ser un titular corto (máx. 8 palabras) que sintetice el diagnóstico
+que acabas de redactar en la *_description de esa dimensión. Lee tu propia descripción y
+extrae la idea central como titular. Usa el tono coherente con lo que escribiste:
+  - Si la descripción señala debilidades claras → título con tono de alerta.
+  - Si señala vulnerabilidades → tono de advertencia.
+  - Si describe una base razonable con mejoras pendientes → tono neutro-constructivo.
+  - Si describe solidez → tono positivo.
+  - Si describe alta optimización → tono muy positivo.
+Ejemplos orientativos (adapta al contenido real de tu descripción):
+  "Composición de activos con debilidades importantes"
+  "Distribución de activos que requiere atención"
+  "Composición razonable con espacio de mejora"
+  "Buena diversificación por tipo de activo"
+  "Composición de activos altamente alineada"
+PROHIBIDO incluir valores numéricos, scores o porcentajes en los títulos.
 
 1) calidad_portafolio_description — UN SOLO PÁRRAFO, 2–3 líneas.
    Describe fluidamente: mezcla de activos, alineación de riesgo al perfil, concentraciones geográficas.
@@ -88,20 +150,30 @@ Sigue esta estructura de contenido:
    Mensaje principal: sobre/subpeso relativo, diversificación, estabilidad.
    Puedes mencionar 2–4 desbalances clave en texto (sin listas).
 
-3) alineacion_riesgo_description — 1 párrafo de contraste de riesgo agregado vs rango del perfil,
+3) alineacion_activo_title — Titular corto que sintetice lo escrito en alineacion_activo_description.
+   Texto plano, sin marcado.
+
+4) alineacion_riesgo_description — 1 párrafo de contraste de riesgo agregado vs rango del perfil,
    seguido de exactamente 3 ítems con <bullet>•</bullet> que empiecen con "En términos prácticos…".
    Separa el párrafo introductorio de los bullets con \\n.
 
-4) alineacion_geografica_description — 1–2 párrafos sobre concentración y subexposición geográfica.
+5) alineacion_riesgo_title — Titular corto que sintetice lo escrito en alineacion_riesgo_description.
+   Texto plano, sin marcado.
+
+6) alineacion_geografica_description — 1–2 párrafos sobre concentración y subexposición geográfica.
    Sin alarmismo. Porcentajes en texto.
 
-5) conclusions — Exactamente 3 a 5 ítems, cada uno comenzando con <bullet>•</bullet>.
+7) alineacion_geografica_title — Titular corto que sintetice lo escrito en alineacion_geografica_description.
+   Texto plano, sin marcado.
+
+8) conclusions — Exactamente 3 a 5 ítems, cada uno comenzando con <bullet>•</bullet>.
    Sintetiza: qué está razonablemente bien, cuál es el foco principal de mejora,
    y urgencia racional ("mientras más se posterga, más lento es corregirlo con flujos futuros").
 
 INPUT
 Recibirás un JSON con estas llaves:
-- global_score
+- global_score (calculado como: activo×0.4 + riesgo×0.4 + geográfica×0.2)
+- global_score_range (string con el rango interpretativo, e.g. "bien_alineado")
 - alineacion_activo{score, asset_details[]}
 - alineacion_riesgo{score, score_total_weighted, perfil_riesgo, perfil_range{min,max}}
 - alineacion_geografica{score, interpretation, region_details[]}
@@ -111,8 +183,11 @@ Recibirás un JSON con estas llaves:
 class CalidadPortafolioOutput(BaseModel):
     calidad_portafolio_description: str
     alineacion_activo_description: str
+    alineacion_activo_title: str
     alineacion_riesgo_description: str
+    alineacion_riesgo_title: str
     alineacion_geografica_description: str
+    alineacion_geografica_title: str
     conclusions: str
 
 
@@ -169,9 +244,32 @@ class AgentService:
     def _json_bytes(json_data: Mapping[str, Any]) -> bytes:
         return json.dumps(json_data, ensure_ascii=False, indent=2).encode("utf-8")
 
+    @staticmethod
+    def _classify_global_score(score: float) -> str:
+        """Return the interpretive range label for a given global_score.
+
+        Ranges are integer-boundary (1-2, 3-4, …, 9-10).  For scores that
+        fall between bands (e.g. 2.5) we round to the nearest integer first.
+        """
+        rounded = round(score)
+        for lo, hi, label in SCORE_RANGES:
+            if lo <= rounded <= hi:
+                return label
+        return "fuera_de_rango"
+
+    @classmethod
+    def _enrich_json(cls, json_data: Mapping[str, Any]) -> dict[str, Any]:
+        """Add derived fields (e.g. global_score_range) to the input data."""
+        enriched = dict(json_data)
+        global_score = enriched.get("global_score")
+        if isinstance(global_score, (int, float)):
+            enriched["global_score_range"] = cls._classify_global_score(float(global_score))
+        return enriched
+
     def _upload_json_file(self, json_data: Mapping[str, Any]) -> str:
         """Upload JSON input as a file and return its OpenAI file_id."""
-        file_obj = io.BytesIO(self._json_bytes(json_data))
+        enriched = self._enrich_json(json_data)
+        file_obj = io.BytesIO(self._json_bytes(enriched))
         uploaded = self._openai.files.create(
             file=(UPLOAD_FILENAME, file_obj, UPLOAD_MIMETYPE),
             purpose=UPLOAD_PURPOSE,
