@@ -23,9 +23,7 @@ UPLOAD_PURPOSE: Final[str] = "assistants"
 
 USER_INSTRUCTION: Final[str] = """Analiza el archivo JSON del portafolio adjunto y genera un reporte estructurado de costos y comisiones.
 
-El reporte debe incluir:
-
-1. **Agrupación inteligente** (`grouped_output`):
+El reporte debe incluir la **Agrupación inteligente** (`grouped_output`):
    - Agrupa productos por `comision_sin_igv`
    - Para cada grupo, crea un nombre descriptivo basado en los nombres de los productos
    - El nombre debe reflejar las características comunes de los productos del grupo
@@ -33,20 +31,6 @@ El reporte debe incluir:
    - Calcula el monto total por grupo
    - Calcula el costo como: `costo = total_amount * fee` (solo si la comisión es numérica)
    - Lista cada producto con su nombre y monto dentro del grupo
-
-2. **Lectura ejecutiva** (`lectura_ejecutiva`):
-   - Máximo 3 párrafos cortos en español
-   - Cada párrafo no debe exceder 3 líneas
-   - Resalta: concentración de costos, diferencias entre productos con/sin comisión, hallazgos clave
-   - **Formato**: Usa etiquetas ReportLab para dar formato al texto:
-     * `<b>texto</b>` para negritas
-     * `<i>texto</i>` para cursivas
-     * `<br/><br/>` para saltos de línea entre párrafos
-
-3. **Oportunidades de mejora** (`oportunidades_mejora`):
-   - Un solo párrafo en español, máximo 5 líneas
-   - Enfócate en recomendaciones accionables para optimizar costos
-   - **Formato**: Usa etiquetas ReportLab (`<b>`, `<i>`, viñetas si es necesario)
 
 **Reglas para nombres de grupo**:
 - Analiza los nombres de productos en cada grupo (misma comisión)
@@ -64,15 +48,12 @@ El reporte debe incluir:
 
 PERSONALITY_PROMPT: Final[str] = """Eres un analista financiero experto en optimización de portafolios y estructura de costos.
 
-Tu misión es procesar datos de portafolio y generar reportes ejecutivos claros, precisos y accionables.
+Tu misión es procesar datos de portafolio y generar agrupaciones inteligentes de costos y comisiones.
 
 **Responsabilidades**:
 1. Analizar la estructura de comisiones del portafolio
 2. Agrupar productos de manera inteligente
 3. Crear nombres de grupo descriptivos basados en la información de los productos
-4. Identificar concentraciones de costos y oportunidades de ahorro
-5. Generar insights ejecutivos con formato profesional
-6. Proporcionar recomendaciones basadas en datos
 
 **Lógica de agrupación y nomenclatura**:
 
@@ -113,18 +94,11 @@ Tu misión es procesar datos de portafolio y generar reportes ejecutivos claros,
 
 **Formato de salida**:
 - Usa SIEMPRE el esquema estructurado `PortfolioReport`
-- Los campos de texto (`lectura_ejecutiva`, `oportunidades_mejora`) DEBEN usar formato ReportLab:
-  * Negritas: `<b>texto</b>` para conceptos clave, cifras importantes
-  * Cursivas: `<i>texto</i>` para énfasis o términos técnicos
-  * Saltos de párrafo: `<br/><br/>` entre párrafos
-  * Ejemplo: `<b>Concentración alta:</b> El <i>42% de los costos</i> proviene del grupo con comisión del <b>0.65%</b><br/><br/>La diversificación...`
 
 **Principios**:
 - Precisión: Solo reporta datos que estén en el archivo
 - Inteligencia: Deriva nombres descriptivos de la información real de los productos
 - Claridad: Los nombres deben ser inmediatamente comprensibles
-- Acción: Enfócate en insights que generen valor
-- Formato: Respeta estrictamente el esquema y las etiquetas ReportLab
 
 **Restricciones**:
 - NO uses nombres genéricos como "comision X.XX" o "grupo N"
@@ -209,20 +183,6 @@ class PortfolioReport(BaseModel):
             "rather than generic labels like 'comision X.XX'."
         )
     )
-    lectura_ejecutiva: str = Field(
-        description=(
-            "Executive summary in Spanish. Maximum 3 short paragraphs (3 lines each). "
-            "Must use ReportLab formatting tags: <b>bold</b>, <i>italic</i>, <br/><br/> for paragraph breaks. "
-            "Highlights cost concentration, fee structure insights, and key findings."
-        )
-    )
-    oportunidades_mejora: str = Field(
-        description=(
-            "Improvement opportunities in Spanish. One paragraph, maximum 5 lines. "
-            "Must use ReportLab formatting tags: <b>bold</b>, <i>italic</i>. "
-            "Focused on actionable recommendations to optimize portfolio costs."
-        )
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -252,13 +212,12 @@ class AgentService:
       1. Uploads JSON portfolio data as a file attachment
       2. Runs the agent with structured output (PortfolioReport)
       3. Agent groups products by fee and derives descriptive names from product information
-      4. Returns validated output with ReportLab-formatted text fields
+      4. Returns validated output with grouped portfolio data
       5. Optionally cleans up the uploaded file
 
     The agent analyzes product names to create descriptive group labels
-    (e.g., "Acciones en bolsa / Credicorp Capital" instead of "comision 0.0065"),
-    calculates costs per group, and generates executive insights with proper
-    ReportLab markup for PDF rendering.
+    (e.g., "Acciones en bolsa / Credicorp Capital" instead of "comision 0.0065")
+    and calculates costs per group.
     """
 
     def __init__(
@@ -370,7 +329,7 @@ class AgentService:
 
         Returns:
             AgentReply with:
-                - output: Validated PortfolioReport as dict (with ReportLab-formatted text)
+                - output: Validated PortfolioReport as dict (grouped portfolio data)
                 - response_id: ID for continuing the conversation
 
         Raises:
