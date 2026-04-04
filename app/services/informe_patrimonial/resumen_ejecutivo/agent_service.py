@@ -38,10 +38,10 @@ Utiliza esta información para redactar el Resumen Ejecutivo del informe.
 
 Redacta el Resumen Ejecutivo siguiendo EXACTAMENTE la estructura de las siguientes secciones:
 
-1. Conclusión general del portafolio (basada en tesis_central)
-2. Qué está funcionando bien (basada en fortalezas)
-3. Principales ineficiencias y acciones recomendadas (basada en ineficiencias_priorizadas)
-4. Mensaje clave (basado en mensaje_final)
+Conclusión general del portafolio (basada en tesis_central)
+Qué está funcionando bien (basada en fortalezas)
+Principales ineficiencias y acciones recomendadas (basada en ineficiencias_priorizadas)
+Mensaje clave (basado en mensaje_final)
 
 Sigue estrictamente el tono y las reglas de formato ReportLab definidas en las instrucciones del sistema.
 
@@ -49,7 +49,12 @@ REGLAS IMPORTANTES:
 - No omitas ninguna sección.
 - No agregues secciones adicionales.
 - No utilices Markdown.
-- Utiliza únicamente las etiquetas <b>, <i> y <br/>.
+- Utiliza únicamente las etiquetas <b>, <i>, <br/> y <font size="X">.
+- NUNCA uses números ni numeraciones en los títulos de sección principales (no usar "1.", "1)", "1 -", etc.). Los títulos de sección NO llevan número.
+- SÍ usa numeración (1, 2, 3) ÚNICAMENTE para los títulos de cada ineficiencia dentro de la sección "Principales ineficiencias y acciones recomendadas".
+- Usa <font size="15"><b>Título de sección</b></font> para los títulos principales de cada sección.
+- Usa <font size="13"><b>Subtítulo</b></font> para subtítulos dentro de cada sección (por ejemplo, el título numerado de cada ineficiencia, o "Qué está pasando", "Por qué importa ahora", "Acciones concretas").
+- Usa tamaño normal (sin etiqueta font) para el texto del cuerpo.
 """
 
 PERSONALITY_PROMPT: Final[str] = """\
@@ -91,10 +96,25 @@ ESTRUCTURA OBLIGATORIA
 
 Debes seguir EXACTAMENTE la siguiente estructura:
 
-1. Conclusión general del portafolio
-2. Qué está funcionando bien
-3. Principales ineficiencias y acciones recomendadas
-4. Mensaje clave
+Conclusión general del portafolio
+Qué está funcionando bien
+Principales ineficiencias y acciones recomendadas
+Mensaje clave
+
+REGLAS DE FORMATO Y JERARQUÍA VISUAL
+
+NUNCA uses números ni numeraciones en los títulos de sección principales
+(no usar "1.", "1)", "1 -", "2.", etc. en "Conclusión general del portafolio",
+"Qué está funcionando bien", "Principales ineficiencias y acciones recomendadas",
+"Mensaje clave").
+
+SÍ usa numeración (1, 2, 3) ÚNICAMENTE para los títulos de cada ineficiencia
+dentro de la sección "Principales ineficiencias y acciones recomendadas".
+
+Para crear jerarquía visual clara, utiliza tamaños de fuente distintos:
+- Títulos de sección: <font size="15"><b>Título</b></font>
+- Subtítulos (título numerado de cada ineficiencia, "Qué está pasando", "Por qué importa ahora", "Acciones concretas"): <font size="13"><b>Subtítulo</b></font>
+- Texto del cuerpo: tamaño normal, sin etiqueta font.
 
 LONGITUD Y CONTENIDO DE CADA SECCIÓN
 
@@ -154,6 +174,7 @@ REGLAS IMPORTANTES
 - Mantener tono profesional pero cercano.
 - No usar lenguaje comercial ni promocional.
 - No utilizar expresiones de miedo o escenarios catastróficos.
+- NUNCA usar números ni numeraciones en los títulos de sección principales. SÍ usar numeración (1, 2, 3) en los títulos de cada ineficiencia.
 
 
 EJEMPLOS DE REFERENCIA
