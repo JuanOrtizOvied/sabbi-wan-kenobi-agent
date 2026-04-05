@@ -50,7 +50,7 @@ SCORE_RANGES: Final[list[tuple[float, float, str]]] = [
 #   - Wrap dimension names in <i>…</i> the first time they appear
 #   - Use "• " bullets for enumerated recommendations or risk factors
 #   - Separate logical paragraphs with <br/><br/>
-#   - conclusions field: open with a <title> line summarising the section
+#   - conclusions field: NO title line (the section already has its own heading)
 # ---------------------------------------------------------------------------
 
 USER_INSTRUCTION: Final[str] = (
@@ -103,7 +103,7 @@ USER_INSTRUCTION: Final[str] = (
     "  • Usa <u>…</u> para subrayado (ej. alertas o recomendaciones clave).\n"
     "  • Usa el carácter '• ' para bullets cuando enumeres factores o recomendaciones.\n"
     "  • Usa <br/><br/> para separar párrafos dentro de un mismo campo.\n"
-    "  • En el campo conclusions, abre con una línea de título en <b><u>…</u></b>.\n"
+    "  • En el campo conclusions, NO incluir línea de título (la sección ya tiene encabezado propio).\n"
     "  • El campo titulo_riesgo_estructural es texto plano corto, SIN marcado XML.\n"
     "  • No inventes datos; usa solo los valores del JSON adjunto.\n"
     "  • No expliques el proceso ni agregues campos adicionales."
@@ -180,8 +180,8 @@ conclusions
   - cómo se manifiesta en el portafolio (sin listar productos)
   - recomendación estructural general (diversificar drivers, reducir dependencia moneda/país con flujos futuros)
   - urgencia racional sin pánico
-  Abre con una línea resumen del nivel usando el valor de nivel_de_riesgo_estructural:
-  ej. "Nivel de riesgo estructural: <b>Medio</b>".
+  NO incluir línea de título (la sección ya tiene encabezado "Conclusión del riesgo estructural").
+  Comienza directamente con el contenido, integrando el nivel de riesgo desde nivel_de_riesgo_estructural.
 
 titulo_riesgo_estructural
   ORDEN: redacta PRIMERO todas las explicaciones y conclusions, DESPUÉS genera este título.
@@ -259,7 +259,7 @@ class RiesgoEstructuralOutput(BaseModel):
             "Conclusión integrada del riesgo estructural: 1–2 párrafos con nivel global "
             "(tomado del campo nivel_de_riesgo_estructural del JSON), "
             "riesgo dominante, cómo se manifiesta y recomendación estructural. "
-            "Formato ReportLab; abrir con línea de título en <b><u>…</u></b>."
+            "Formato ReportLab; NO incluir línea de título (la sección ya tiene encabezado propio)."
         )
     )
     titulo_riesgo_estructural: str = Field(
