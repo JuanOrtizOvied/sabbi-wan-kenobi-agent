@@ -42,7 +42,12 @@ El reporte debe incluir la **Agrupación inteligente** (`grouped_output`):
 **Casos especiales**:
 - Si `comision_sin_igv` es `"0"` Y los productos son ahorro/cash/liquidez → nombre: `"Cash / ahorro"`
 - Si `comision_sin_igv` es `"0"` Y los productos NO son ahorro → nombre: `"Inversiones sin comisión (no cash)"`
-- Si `comision_sin_igv` no es numérica → `costo = null` (no calcular)
+- Si `comision_sin_igv` contiene múltiples valores (ej: "Clase A 1.75% - Clase B 1.05%"), extrae todos los porcentajes y usa el **más alto** como fee numérico (ej: 0.0175)
+
+**Regla de salida para `fee`**:
+- El campo `fee` en el output SIEMPRE debe ser un número (float), nunca un string
+- Convierte porcentajes a decimal si es necesario (ej: 1.75% → 0.0175)
+- Si hay múltiples valores, usa el más alto convertido a decimal
 
 **Importante**: No inventes datos que no estén en el archivo JSON."""
 
@@ -87,10 +92,12 @@ Tu misión es procesar datos de portafolio y generar agrupaciones inteligentes d
 
 5. **Reglas de cálculo**:
    - `total_amount` = suma de todos los amounts de productos en el grupo
-   - `fee` = el valor de comision_sin_igv (como string)
-   - `costo` = total_amount * fee (como número) SI fee es numérico
-   - `costo` = null SI fee NO es numérico (ej: "Clase A 1.75% - Clase B 1.05%")
-   - Para fee = "0": costo = 0.0
+   - `fee` = el valor de comision_sin_igv convertido a número decimal (float)
+   - Si `comision_sin_igv` contiene múltiples valores (ej: "Clase A 1.75% - Clase B 1.05%"), extrae todos los porcentajes, toma el **más alto** y conviértelo a decimal (ej: 1.75% → 0.0175)
+   - Si `comision_sin_igv` es un valor simple como "0.0065", úsalo directamente como float
+   - `fee` en el output SIEMPRE debe ser un número (float), nunca un string
+   - `costo` = total_amount * fee
+   - Para fee = 0: costo = 0.0
 
 **Formato de salida**:
 - Usa SIEMPRE el esquema estructurado `PortfolioReport`
@@ -117,7 +124,7 @@ Tu misión es procesar datos de portafolio y generar agrupaciones inteligentes d
 #   {
 #     "group_name": "Acciones en bolsa / Credicorp Capital",  # Derived from provider in product names
 #     "total_amount": 259891.0,
-#     "fee": "0.0065",
+#     "fee": 0.0065,
 #     "costo": 1689.29,
 #     "products": [
 #       {"name": "SNJUANC1", "amount": 91469.0},
@@ -128,21 +135,21 @@ Tu misión es procesar datos de portafolio y generar agrupaciones inteligentes d
 #   {
 #     "group_name": "Bonos Sabadell Investment Grade",  # Derived from common characteristics
 #     "total_amount": 118686.85,
-#     "fee": "0.007",
+#     "fee": 0.007,
 #     "costo": 830.81,
 #     "products": [...]
 #   },
 #   {
-#     "group_name": "Sabbi Oportunidad",  # Single product - use product name
+#     "group_name": "Nota estructurada Sabadell - JPMORGAN SOXX PPN",
 #     "total_amount": 100000.0,
-#     "fee": "Clase A 1.75% - Clase B 1.05%",
-#     "costo": null,
+#     "fee": 0.0175,
+#     "costo": 1750.0,
 #     "products": [...]
 #   },
 #   {
 #     "group_name": "Cash / ahorro",  # Special case: fee=0 with savings products
 #     "total_amount": 199922.41,
-#     "fee": "0",
+#     "fee": 0,
 #     "costo": 0.0,
 #     "products": [...]
 #   }
@@ -165,9 +172,9 @@ class FeeGroup(BaseModel):
         )
     )
     total_amount: float = Field(description="Sum of all product amounts in this group")
-    fee: str = Field(description="Fee/commission rate as string (e.g., '2.5', '0', 'N/A')")
-    costo: float | None = Field(
-        description="Calculated cost (total_amount * fee). Null if fee is not numeric."
+    fee: float = Field(description="Fee/commission rate as a decimal number (e.g., 0.0065, 0.0175). When the original value contains multiple rates, use the highest one.")
+    costo: float = Field(
+        description="Calculated cost (total_amount * fee)."
     )
     products: list[ProductAmount] = Field(
         description="List of products in this group with individual amounts"
