@@ -13,7 +13,9 @@ from app.services.informe_patrimonial.portfolio_analyzer.agent_service import Po
 from openpyxl import Workbook
 
 from .calidad_portafolio.schemas import ReportRequest
+from .riesgo_estructural.schemas import StructuralRiskData
 from app.services.informe_patrimonial.calidad_portafolio.excel import build_asset_sheet, build_risk_sheet, build_geo_sheet
+from app.services.informe_patrimonial.riesgo_estructural.excel import build_structural_risk_excel
 
 informe_patrimonial_router = APIRouter()
 agent = AgentService()
@@ -104,3 +106,45 @@ async def generate_report(req: ReportRequest):
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@informe_patrimonial_router.post(
+    "/structural-risk/excel",
+    response_class=Response,
+    summary="Generate structural risk Excel report",
+    responses={
+        200: {
+            "content": {
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": {}
+            },
+            "description": "Excel workbook with 4 sheets: "
+                           "Concentración, Correlación, Gestor y Administrador, Moneda.",
+        }
+    },
+)
+async def generate_structural_risk_excel(payload: StructuralRiskData):
+    """
+    Receive structural risk scoring data and return an Excel report.
+
+    The workbook contains four sheets showing step-by-step calculations:
+    - **Concentración**: HHI + max weight → blended score
+    - **Correlación**: weighted correlation matrix → score
+    - **Gestor y Administrador**: entity-weighted scores
+    - **Moneda**: PEN exposure → score + global summary
+    """
+    try:
+        wb = build_structural_risk_excel(payload.model_dump())
+
+        buffer = io.BytesIO()
+        wb.save(buffer)
+        content = buffer.getvalue()
+
+        return Response(
+            content=content,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            headers={
+                "Content-Disposition": "attachment; filename=riesgo_estructural.xlsx"
+            },
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))

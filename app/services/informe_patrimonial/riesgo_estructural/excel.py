@@ -78,7 +78,7 @@ def build_concentracion_sheet(wb, data: dict):
     _cell(ws, r, 4, conc["hhi"], font=BOLD_FONT, fmt="0.000000")
     r += 2
 
-    # 2. HHI
+    # 2. HHI result
     ws.cell(row=r, column=1, value="2. Índice HHI").font = SECTION_FONT
     r += 1
     _cell(ws, r, 1, "HHI = Σ wi²")
@@ -88,33 +88,8 @@ def build_concentracion_sheet(wb, data: dict):
     _cell(ws, r, 2, conc["inversiones_totales"], fmt="0.0000")
     r += 2
 
-    # 3. HHI score table
-    ws.cell(row=r, column=1, value="3. Escala de Score por HHI").font = SECTION_FONT
-    r += 1
-    _header_row(ws, r, ["HHI", "Score", "Interpretación"])
-    r += 1
-    for rng, s, interp in [
-        ("≤ 0.13", "9–10", "Excelente diversificación"),
-        ("0.13 – 0.17", "8", "Muy bien diversificado"),
-        ("0.17 – 0.22", "7", "Bien diversificado"),
-        ("0.22 – 0.28", "6", "Diversificación razonable"),
-        ("0.28 – 0.34", "5", "Concentración moderada"),
-        ("0.34 – 0.41", "4", "Concentrado"),
-        ("0.41 – 0.51", "3", "Muy concentrado"),
-        ("0.51 – 0.66", "2", "Riesgo alto"),
-        ("> 0.66", "1", "Riesgo crítico"),
-    ]:
-        _cell(ws, r, 1, rng)
-        _cell(ws, r, 2, s)
-        _cell(ws, r, 3, interp)
-        r += 1
-    _cell(ws, r, 1, "Score HHI del portafolio", font=BOLD_FONT)
-    _cell(ws, r, 2, conc["hhi_score"], font=BOLD_FONT, fill=YELLOW_FILL)
-    _cell(ws, r, 3, conc.get("hhi_interpretacion", ""), font=BOLD_FONT)
-    r += 2
-
-    # 4. Max weight
-    ws.cell(row=r, column=1, value="4. Peso de la mayor posición").font = SECTION_FONT
+    # 3. Max weight
+    ws.cell(row=r, column=1, value="3. Peso de la mayor posición").font = SECTION_FONT
     r += 1
     _cell(ws, r, 1, "Mayor posición")
     _cell(ws, r, 2, conc["max_weight_nombre"])
@@ -141,18 +116,47 @@ def build_concentracion_sheet(wb, data: dict):
     _cell(ws, r, 3, conc.get("max_weight_interpretacion", ""), font=BOLD_FONT)
     r += 2
 
-    # 5. Blended score
-    ws.cell(row=r, column=1, value="5. Score final de concentración").font = SECTION_FONT
+    # 4. Blended indicator → HHI table lookup
+    ws.cell(row=r, column=1, value="4. Score final de concentración").font = SECTION_FONT
     r += 1
     _cell(ws, r, 1, "Fórmula")
-    _cell(ws, r, 2, "0.70 × Score(HHI) + 0.30 × Score(peso máximo)")
+    _cell(ws, r, 2, "total = 0.70 × HHI + 0.30 × peso máximo")
     r += 1
-    _cell(ws, r, 1, "0.70 × Score(HHI)")
-    _cell(ws, r, 2, round(0.7 * conc["hhi_score"], 2), fmt="0.00")
+    hhi_val = conc["hhi"]
+    mw_val = conc["max_weight"]
+    _cell(ws, r, 1, f"0.70 × HHI (0.70 × {hhi_val:.6f})")
+    _cell(ws, r, 2, round(0.7 * hhi_val, 6), fmt="0.000000")
     r += 1
-    _cell(ws, r, 1, "0.30 × Score(peso máx)")
-    _cell(ws, r, 2, round(0.3 * conc["max_weight_score"], 2), fmt="0.00")
+    _cell(ws, r, 1, f"0.30 × peso máx (0.30 × {mw_val:.6f})")
+    _cell(ws, r, 2, round(0.3 * mw_val, 6), fmt="0.000000")
     r += 1
+    total = conc.get("total", round(0.7 * hhi_val + 0.3 * mw_val, 6))
+    _cell(ws, r, 1, "Total", font=BOLD_FONT)
+    _cell(ws, r, 2, total, font=BOLD_FONT, fmt="0.000000")
+    r += 2
+
+    # HHI table applied to total
+    _cell(ws, r, 1, "Búsqueda en tabla HHI", font=BOLD_FONT)
+    r += 1
+    _header_row(ws, r, ["HHI", "Score", "Interpretación"])
+    r += 1
+    for rng, s, interp in [
+        ("≤ 0.13", "9–10", "Excelente diversificación"),
+        ("0.13 – 0.17", "8", "Muy bien diversificado"),
+        ("0.17 – 0.22", "7", "Bien diversificado"),
+        ("0.22 – 0.28", "6", "Diversificación razonable"),
+        ("0.28 – 0.34", "5", "Concentración moderada"),
+        ("0.34 – 0.41", "4", "Concentrado"),
+        ("0.41 – 0.51", "3", "Muy concentrado"),
+        ("0.51 – 0.66", "2", "Riesgo alto"),
+        ("> 0.66", "1", "Riesgo crítico"),
+    ]:
+        _cell(ws, r, 1, rng)
+        _cell(ws, r, 2, s)
+        _cell(ws, r, 3, interp)
+        r += 1
+    r += 1
+
     _cell(ws, r, 1, "SCORE CONCENTRACIÓN", font=SCORE_LABEL_FONT)
     _cell(ws, r, 2, conc["score"], font=SCORE_FONT, fill=YELLOW_FILL, fmt="0.00")
     _cell(ws, r, 3, conc.get("interpretacion", ""), font=BOLD_FONT)
