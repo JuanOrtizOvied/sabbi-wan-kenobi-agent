@@ -1,80 +1,113 @@
 from pydantic import BaseModel
-from typing import Any, Dict, List, Optional
 
 
-class ConcentracionItem(BaseModel):
-    nombre: str
-    subyacentes: List[Dict[str, Any]] = []
+class AssetDetail(BaseModel):
+    asset_name: str
+    benchmark_percentage: float
+    investor_percentage: float
+    min_limit: float
+    max_limit: float
+    penalty: float
+    is_within_limits: bool
+    deviation: float
+
+
+class AssetSummary(BaseModel):
+    total_assets_evaluated: int
+    assets_within_limits: int
+    assets_outside_limits: int
+    portfolio_assets_not_in_benchmark: int
+    total_positive_deviation: float
+    total_negative_deviation: float
+
+
+class AssetAlignmentData(BaseModel):
+    score: int
+    distancia_estructural: float
+    penalizacion_total: float
+    asset_percentage: float
+    asset_details: list[AssetDetail]
+    summary: AssetSummary
+
+
+class InvestmentContribution(BaseModel):
+    producto_nombre: str
+    tipo_activo: list[str]
     monto: float
+    peso_inversion: float
+    risk_score: float
+    aporte: float
+
+
+class TipoActivoContribution(BaseModel):
+    tipo_activo: str
     weight: float
-    weight_2: float
-
-
-class ConcentracionResult(BaseModel):
-    items: List[ConcentracionItem]
-    hhi: float
-    hhi_score: int
-    hhi_interpretacion: str = ""
-    max_weight: float
-    max_weight_nombre: str
-    max_weight_score: int
-    max_weight_interpretacion: str = ""
-    inversiones_totales: float
+    portfolio_percentage: float
+    monto: float
     score: float
-    total: float = 0.0
-    interpretacion: str = ""
 
 
-class CorrelacionCell(BaseModel):
-    asset_i: str
-    asset_j: str
-    weight_i: float
-    weight_j: float
-    corr: float
-    value: float
+class DCalculation(BaseModel):
+    score_total: float
+    perfil_min: float
+    perfil_max: float
+    first_quarter: float
+    midpoint: float
+    third_quarter: float
+    zone: str
+    reference_point: float
+    d_value: float
 
 
-class LookupWarning(BaseModel):
-    dimension: str
-    value: str
-    item: str
-    weight: float
+class PerfilRange(BaseModel):
+    min: float
+    max: float
 
 
-class CorrelacionResult(BaseModel):
-    subyacentes_weights: Dict[str, float]
-    correlation_matrix: List[CorrelacionCell]
-    total_correlation: float
+class RiskAlignmentData(BaseModel):
     score: int
-    interpretacion: str = ""
-    unmatched: List[LookupWarning] = []
+    score_total_weighted: float
+    perfil_riesgo: str
+    perfil_range: PerfilRange
+    d_value: float
+    d_calculation: DCalculation
+    tipo_activo_contributions: list[TipoActivoContribution]
+    total_portfolio_percentage_by_activo: float
+    investment_contributions: list[InvestmentContribution]
 
 
-class EntityGroup(BaseModel):
-    name: str
-    weight: float
-    points: float
-    weighted_points: float
+class RegionDetail(BaseModel):
+    region: str
+    benchmark_percentage: float
+    portfolio_percentage: float
+    tolerance: str
+    min_limit: float
+    max_limit: float
+    deviation: float
+    penalty: float
+    is_within_limits: bool
 
 
-class EntityScoreResult(BaseModel):
-    groups: List[EntityGroup]
-    score: float
-    unmatched: List[LookupWarning] = []
+class GeoSummary(BaseModel):
+    total_regions_in_benchmark: int
+    regions_within_limits: int
+    regions_outside_limits: int
+    portfolio_regions_not_in_benchmark: int
 
 
-class MonedaResult(BaseModel):
-    pen_total: float
-    pen_pct: float
+class GeoAlignmentData(BaseModel):
     score: int
+    interpretation: str
+    total_deviation: float
+    region_details: list[RegionDetail]
+    unmapped_regions: list
+    summary: GeoSummary
 
 
 class ReportRequest(BaseModel):
-    """Full structural risk scoring payload."""
-    concentracion: ConcentracionResult
-    correlacion: CorrelacionResult
-    gestor: EntityScoreResult
-    administrador: EntityScoreResult
-    moneda: MonedaResult
-    global_score: float
-    has_warnings: bool = False
+    inversionista: str
+    total_patrimonio: float
+    perfil_riesgo: str
+    asset_alignment: AssetAlignmentData
+    risk_alignment: RiskAlignmentData
+    geo_alignment: GeoAlignmentData

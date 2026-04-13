@@ -1,17 +1,6 @@
-"""
-FastAPI service for generating structural risk Excel reports.
-
-POST /structural-risk/excel
-    Receives the scoring JSON payload and returns the .xlsx file.
-"""
-from __future__ import annotations
-
-from typing import Any, Dict, List
-
 from pydantic import BaseModel
+from typing import Any, Dict, List, Optional
 
-
-# ── Pydantic models ──────────────────────────────────────────────
 
 class ConcentracionItem(BaseModel):
     nombre: str
@@ -32,6 +21,7 @@ class ConcentracionResult(BaseModel):
     max_weight_interpretacion: str = ""
     inversiones_totales: float
     score: float
+    total: float = 0.0
     interpretacion: str = ""
 
 
