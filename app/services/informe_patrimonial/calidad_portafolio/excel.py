@@ -115,7 +115,7 @@ def build_asset_sheet(wb, req: ReportRequest):
     # Section 4: Comparison & penalties
     ws.cell(row=r, column=1, value="4. Comparación vs benchmark y penalizaciones").font = SECTION_FONT
     r += 1
-    headers = ["Clase de activo", "Benchmark", "Rango Min", "Rango Max", req.inversionista.title(), "Desviación",
+    headers = ["Clase de activo", "Benchmark", "Rango Min", "Rango Max", req.inversionista.title() or "Inversionista", "Desviación",
                "Penalización", "¿Dentro?"]
     for i, h in enumerate(headers, 1):
         ws.cell(row=r, column=i, value=h)
