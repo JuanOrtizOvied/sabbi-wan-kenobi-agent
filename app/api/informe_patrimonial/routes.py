@@ -100,7 +100,7 @@ async def generate_report(req: ReportRequest):
     wb.save(buf)
     buf.seek(0)
 
-    filename = f"alineacion_{req.inversionista.replace(' ', '_').lower()}.xlsx"
+    filename = f"calidad_portafolio.xlsx"
     return Response(
         content=buf.getvalue(),
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
