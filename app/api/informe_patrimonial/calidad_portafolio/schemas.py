@@ -100,7 +100,7 @@ class GeoAlignmentData(BaseModel):
     interpretation: str
     total_deviation: float
     region_details: list[RegionDetail]
-    unmapped_regions: list
+    unmapped_regions: list = []
     summary: GeoSummary
 
 
