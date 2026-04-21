@@ -1,5 +1,7 @@
 import io
-import json
+
+from datetime import datetime, timezone
+from typing import List
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
@@ -14,8 +16,11 @@ from openpyxl import Workbook
 
 from .calidad_portafolio.schemas import ReportRequest
 from .riesgo_estructural.schemas import StructuralRiskData
+from .portfolio.schemas import PortafolioItem
 from app.services.informe_patrimonial.calidad_portafolio.excel import build_asset_sheet, build_risk_sheet, build_geo_sheet
 from app.services.informe_patrimonial.riesgo_estructural.excel import build_structural_risk_excel
+from app.services.informe_patrimonial.portfolio.excel import generate_portfolio_excel
+
 
 informe_patrimonial_router = APIRouter()
 agent = AgentService()
@@ -148,3 +153,17 @@ async def generate_structural_risk_excel(payload: StructuralRiskData):
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+
+@informe_patrimonial_router.post("/portfolio/excel")
+async def generate_excel(portafolio: List[PortafolioItem]):
+    xlsx_bytes = generate_portfolio_excel(portafolio)
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H-%M-%S")
+    filename = f"Portfolio-{timestamp}.xlsx"
+
+    return Response(
+        content=xlsx_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
