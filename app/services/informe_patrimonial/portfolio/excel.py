@@ -34,26 +34,23 @@ _PCT_FMT = "0.00%"
 # ──────────────────────────────────────────────
 # Flat fields: columns 1–13
 _FLAT_HEADERS = [
-    "cuenta_bancaria_inversion",  # A
-    "tipo_activo",                # B
-    "pertenencia",                # C
-    "moneda_invertida",           # D
-    "valor_estimado_usd",         # E
-    "rendimiento_anual_porcentaje",  # F
-    "name",                       # G
-    "slugs",                      # H
-    "comision_sin_igv",           # I
-    "moneda",                     # J
-    "administrador",              # K
-    "gestor",                     # L
-    "liquidez",                   # M
+    "nombre",                        # A  (cuenta_bancaria_inversion)
+    "tipo_activo",                   # B
+    "pertenencia",                   # C
+    "valor_estimado_usd",            # D
+    "rendimiento_anual_porcentaje",  # E
+    "comision_sin_igv",              # F
+    "moneda",                        # G
+    "administrador",                 # H
+    "gestor",                        # I
+    "liquidez",                      # J
 ]
-_NUM_FLAT = len(_FLAT_HEADERS)  # 13
+_NUM_FLAT = len(_FLAT_HEADERS)  # 10
 
 # Nested groups: 3 columns each starting after flat fields
-# clase_activo  → cols 14-16 (N-P)
-# foco_geografico → cols 17-19 (Q-S)
-# subyacente    → cols 20-22 (T-V)
+# clase_activo    → cols 11-13 (K-M)
+# foco_geografico → cols 14-16 (N-P)
+# subyacente      → cols 17-19 (Q-S)
 _NESTED_GROUPS = [
     {"label": "clase_activo", "attr": "clase_activo", "start_col": _NUM_FLAT + 1},
     {"label": "foco_geografico", "attr": "foco_geografico", "start_col": _NUM_FLAT + 4},
@@ -61,15 +58,14 @@ _NESTED_GROUPS = [
 ]
 _SUB_HEADERS = ["name", "percentage", "slugs"]
 
-_TOTAL_COLS = _NUM_FLAT + 9  # 22
+_TOTAL_COLS = _NUM_FLAT + 9  # 19
 
 _COL_WIDTHS = {
-    "A": 48, "B": 20, "C": 12, "D": 14, "E": 18,
-    "F": 16, "G": 42, "H": 48, "I": 14, "J": 12,
-    "K": 20, "L": 20, "M": 16,
-    "N": 30, "O": 12, "P": 38,
-    "Q": 22, "R": 12, "S": 22,
-    "T": 36, "U": 12, "V": 36,
+    "A": 48, "B": 20, "C": 12, "D": 18, "E": 16,
+    "F": 14, "G": 12, "H": 20, "I": 20, "J": 16,
+    "K": 30, "L": 12, "M": 38,
+    "N": 22, "O": 12, "P": 22,
+    "Q": 36, "R": 12, "S": 36,
 }
 
 
@@ -114,17 +110,13 @@ def _write_sub_header_row(ws, row):
 
 
 def _get_flat_values(item) -> list:
-    """Extract the 13 flat-field values from a portfolio item."""
-    slugs_str = ", ".join(item.slugs) if item.slugs else ""
+    """Extract the 10 flat-field values from a portfolio item."""
     return [
         item.cuenta_bancaria_inversion,
         item.tipo_activo,
         item.pertenencia,
-        item.moneda_invertida,
         item.valor_estimado_usd,
         item.rendimiento_anual_porcentaje,
-        item.name,
-        slugs_str,
         item.comision_sin_igv,
         item.moneda,
         item.administrador,
@@ -154,9 +146,9 @@ def _write_item_block(ws, start_row, item) -> int:
     flat_values = _get_flat_values(item)
     for col_idx, value in enumerate(flat_values, 1):
         fmt = None
-        if col_idx == 5:   # valor_estimado_usd
+        if col_idx == 4:   # valor_estimado_usd
             fmt = _CURRENCY_FMT
-        elif col_idx == 6:  # rendimiento_anual_porcentaje
+        elif col_idx == 5:  # rendimiento_anual_porcentaje
             fmt = _PCT_FMT
         _set_cell(ws, start_row, col_idx, value, number_format=fmt)
 
@@ -167,8 +159,7 @@ def _write_item_block(ws, start_row, item) -> int:
                 end_row=start_row + total_rows - 1, end_column=col_idx,
             )
     # Set wrap on long text fields
-    for col_idx in (1, 7, 8):
-        ws.cell(row=start_row, column=col_idx).alignment = _ALIGN_WRAP
+    ws.cell(row=start_row, column=1).alignment = _ALIGN_WRAP
 
     # ── Data rows for nested arrays ──
     for i in range(data_rows):
