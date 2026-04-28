@@ -104,10 +104,27 @@ class GeoAlignmentData(BaseModel):
     summary: GeoSummary
 
 
+class BenchmarkAllocation(BaseModel):
+    assetClass: str
+    slug: str
+    slugs: list[str] = []
+    code: str
+    percentage: float
+
+
+class BenchmarkProfile(BaseModel):
+    riskProfile: str
+    slug: str
+    code: str
+    allocations: list[BenchmarkAllocation]
+
+
 class ReportRequest(BaseModel):
     inversionista: str
     total_patrimonio: float
     perfil_riesgo: str
+    benchmarks_over_500k: list[BenchmarkProfile]
+    benchmarks_under_500k: list[BenchmarkProfile]
     asset_alignment: AssetAlignmentData
     risk_alignment: RiskAlignmentData
     geo_alignment: GeoAlignmentData

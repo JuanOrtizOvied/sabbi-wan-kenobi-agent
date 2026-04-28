@@ -80,17 +80,65 @@ def build_asset_sheet(wb, req: ReportRequest):
         r += 1
     r += 1
 
+    # Benchmark reference tables (≥500K and <500K)
+    for bm_label, bm_data in [
+        ("Benchmark ≥ 500K", req.benchmarks_over_500k),
+        ("Benchmark < 500K", req.benchmarks_under_500k),
+    ]:
+        ws.cell(row=r, column=1, value=bm_label).font = SECTION_FONT
+        r += 1
+
+        profile_names = [p.riskProfile for p in bm_data]
+        bm_headers = ["Clase de activo"] + profile_names
+        for i, h in enumerate(bm_headers, 1):
+            ws.cell(row=r, column=i, value=h)
+        style_header_row(ws, r, len(bm_headers))
+        r += 1
+
+        # Pivot: collect unique asset classes preserving order
+        asset_classes = []
+        seen = set()
+        for profile in bm_data:
+            for alloc in profile.allocations:
+                if alloc.assetClass not in seen:
+                    asset_classes.append(alloc.assetClass)
+                    seen.add(alloc.assetClass)
+
+        # Build lookup: {(profile_index, asset_class): percentage}
+        pct_lookup = {}
+        for pi, profile in enumerate(bm_data):
+            for alloc in profile.allocations:
+                pct_lookup[(pi, alloc.assetClass)] = alloc.percentage
+
+        for asset_class in asset_classes:
+            style_data_cell(ws, r, 1).value = asset_class
+            for pi in range(len(bm_data)):
+                pct = pct_lookup.get((pi, asset_class), 0)
+                style_data_cell(ws, r, pi + 2, "0.00%").value = pct / 100
+            r += 1
+        r += 1
+
     # Section 2: Benchmark
     ws.cell(row=r, column=1, value="2. Benchmark utilizado").font = SECTION_FONT
     r += 1
-    headers = ["Clase de activo", "Benchmark %"]
+    headers = ["Clase de activo", "Benchmark %", "Rango (±5%)"]
     for i, h in enumerate(headers, 1):
         ws.cell(row=r, column=i, value=h)
     style_header_row(ws, r, len(headers))
     r += 1
+    SYMMETRIC_RANGE_ASSETS = {
+        "Mercados Publicos - Fijo",
+        "Mercados Publicos - Variable",
+        "Mercados Privados",
+        "Cash y Otros",
+    }
     for ad in d.asset_details:
         style_data_cell(ws, r, 1).value = ad.asset_name
         style_data_cell(ws, r, 2, "0.00%").value = ad.benchmark_percentage / 100
+        if ad.asset_name in SYMMETRIC_RANGE_ASSETS:
+            style_data_cell(ws, r, 3).value = "±5%"
+        else:
+            style_data_cell(ws, r, 3).value = "0% a +5%"
         r += 1
     ws.cell(row=r, column=1, value="Total").font = Font(bold=True, name="Arial", size=10)
     ws.cell(row=r, column=2, value=1).number_format = "0.00%"
@@ -138,6 +186,33 @@ def build_asset_sheet(wb, req: ReportRequest):
     ws.cell(row=r, column=7, value=d.penalizacion_total / 100).number_format = "0.00%"
     ws.cell(row=r, column=7).font = Font(bold=True, name="Arial", size=10)
     r += 2
+
+    # Section 4.5: Score thresholds
+    ws.cell(row=r, column=1, value="Tabla de Score por Desviación Estructural").font = SECTION_FONT
+    r += 1
+    score_headers = ["Desviación Mín (%)", "Desviación Máx (%)", "Score"]
+    for i, h in enumerate(score_headers, 1):
+        ws.cell(row=r, column=i, value=h)
+    style_header_row(ws, r, len(score_headers))
+    r += 1
+    ASSET_SCORE_THRESHOLDS = [
+        (0, 2.5, 10),
+        (2.5, 5, 9),
+        (5, 7.5, 8),
+        (7.5, 10, 7),
+        (10, 15, 6),
+        (15, 20, 5),
+        (20, 27.5, 4),
+        (27.5, 35, 3),
+        (35, 40, 2),
+        (40, 100, 1),
+    ]
+    for mn, mx, sc in ASSET_SCORE_THRESHOLDS:
+        style_data_cell(ws, r, 1, "0.0").value = mn
+        style_data_cell(ws, r, 2, "0.0").value = mx
+        style_data_cell(ws, r, 3).value = sc
+        r += 1
+    r += 1
 
     # Section 5: Structural distance & score
     ws.cell(row=r, column=1, value="5. Distancia estructural y Score").font = SECTION_FONT
@@ -312,7 +387,7 @@ def build_geo_sheet(wb, req: ReportRequest):
     # Comparison
     ws.cell(row=r, column=1, value="3. Distribución geográfica del portafolio").font = SECTION_FONT
     r += 1
-    headers = ["Región", "Benchmark", "Lím. Inf.", "Lím. Sup.", req.inversionista.title(), "Desviación", "Penalización",
+    headers = ["Región", "Benchmark", "Lím. Inf.", "Lím. Sup.", "Inversionista", "Desviación", "Penalización",
                "¿Dentro?"]
     for i, h in enumerate(headers, 1):
         ws.cell(row=r, column=i, value=h)

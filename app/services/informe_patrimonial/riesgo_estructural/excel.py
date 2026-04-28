@@ -232,14 +232,16 @@ def build_correlacion_sheet(wb, data: dict):
     _header_row(ws, r, ["Correlación promedio", "Score", "Interpretación"])
     r += 1
     for rng, s, interp in [
-        ("≤ 0.25", 10, "Diversificación excepcional"),
-        ("0.26 – 0.35", "8–9", "Diversificación real (multi-factor)"),
-        ("0.36 – 0.45", 7, "Portafolio eficiente"),
-        ("0.46 – 0.52", 6, "Correlación moderada"),
-        ("0.53 – 0.57", 5, "Riesgo sistémico creciente"),
-        ("0.58 – 0.62", 4, "Alta sincronización"),
-        ("0.63 – 0.68", 3, "Riesgo estructural alto"),
-        ("> 0.68", "1–2", "Efecto dominó"),
+        ("≤ 0.30", 10, "Diversificación excepcional"),
+        ("0.30 – 0.36", 9, "Muy buena diversificación"),
+        ("0.36 – 0.41", 8, "Buena diversificación"),
+        ("0.41 – 0.45", 7, "Aceptable"),
+        ("0.45 – 0.49", 6, "Riesgo moderado"),
+        ("0.49 – 0.53", 5, "Riesgo relevante"),
+        ("0.53 – 0.58", 4, "Alta correlación"),
+        ("0.58 – 0.63", 3, "Riesgo alto"),
+        ("0.63 – 0.69", 2, "Riesgo crítico"),
+        (">= 0.69", 1, "Riesgo crítico"),
     ]:
         _cell(ws, r, 1, rng)
         _cell(ws, r, 2, str(s))
