@@ -21,6 +21,8 @@ UPLOAD_MIMETYPE: Final[str] = "application/json"
 UPLOAD_PURPOSE: Final[str] = "assistants"
 
 USER_INSTRUCTION: Final[str] = """\
+Analiza el archivo adjunto que contiene los datos completos del portafolio de inversión de un cliente.
+
 El archivo incluye:
 - Datos del cliente (perfil de riesgo, horizonte, patrimonio total e invertible, contexto personal)
 - Composición del portafolio (por tipo de activo, geografía, moneda e instrumentos)
@@ -36,7 +38,8 @@ Recuerda:
 - Identifica la tesis central antes de construir el resto del análisis.
 - Selecciona exactamente 3 fortalezas reales y relevantes.
 - Prioriza exactamente 3 ineficiencias estructurales INDEPENDIENTES entre sí, ordenadas por impacto.
-- Cada ineficiencia debe incluir acciones con referencias a magnitudes concretas del portafolio.
+- Cada ineficiencia debe incluir exactamente 1 acción recomendada (excepcionalmente 2 si son genuinamente independientes).
+- Toda concentración geográfica relevante debe expresarse en USD además del porcentaje.
 - Genera exactamente 3 focos de mejora que sinteticen visualmente las ineficiencias.
 - Genera un plan de acción priorizado con 3 acciones concretas, cada una con 2-3 pasos.
 - El mensaje final debe condensar el insight estratégico más importante.
@@ -93,9 +96,10 @@ Dimensiones a evaluar:
    para el horizonte y las necesidades del cliente?
 
 6. Gap de ingresos pasivos
-   Si el objetivo es "generar ingresos pasivos", ¿puede el portafolio financiero actual
-   generar el flujo requerido? ¿Existe un gap material entre la capacidad actual y la meta?
-   Este gap es una ineficiencia prioritaria si supera el 30% del flujo objetivo.
+   Activar SOLO si flujo_mensual_requerido_usd > 500.
+   En ese caso: ¿puede el portafolio financiero actual generar ese flujo?
+   Si el gap entre capacidad estimada y flujo requerido supera el 30%, es ineficiencia prioritaria.
+   Si flujo_mensual_requerido_usd = 0 o menor a 500, no activar este análisis.
 
 7. Concentración en drivers económicos
    ¿Varios activos distintos responden al mismo ciclo económico?
@@ -137,12 +141,12 @@ del cliente que debe influir materialmente en el diagnóstico. No es informació
 
 Úsala de la siguiente manera:
 
-- flujo_mensual_requerido_usd: si el cliente necesita ingresos pasivos, evalúa si el
-  portafolio actual puede generarlos. Si hay un gap relevante, es una ineficiencia prioritaria.
+- flujo_mensual_requerido_usd: activa el análisis de gap solo si el valor es > 500.
 
 - ahorro_mensual_disponible_usd: informa la velocidad realista de corrección de problemas.
   Si el cliente puede ahorrar significativamente por mes, los problemas que requieren grandes
   ventas son menos urgentes que los corregibles con nuevos flujos.
+  Si el ahorro es 0, la corrección depende de reasignación de capital existente — mencionarlo.
 
 - deudas_totales_usd: afecta el análisis de liquidez. Deudas relevantes implican
   que la liquidez disponible puede estar parcialmente comprometida.
@@ -150,10 +154,14 @@ del cliente que debe influir materialmente en el diagnóstico. No es informació
 - edad: un cliente de 60+ años tiene un análisis de iliquidez y horizonte muy distinto
   al de uno de 40. Ajusta la priorización según edad y horizonte declarado.
 
-- postura_inversion_peru: si el cliente declaró que solo invierte en Perú si da retornos
-  más altos, la concentración geográfica es más urgente.
+- postura_inversion_peru: si el cliente declaró que prefiere evitar Perú o solo invierte
+  en Perú si da retornos más altos, la concentración geográfica es más urgente y debe
+  mencionarse explícitamente como contradicción con su postura declarada.
 
 - tolerancia_perdida_maxima: úsala para calibrar la urgencia de riesgos de drawdown.
+
+- tiene_dependientes: si el cliente tiene dependientes, el análisis de liquidez e
+  iliquidez estructural es más urgente — mencionarlo explícitamente.
 
 - objetivo_principal y horizonte_declarado: determinan qué tipo de riesgos son
   más críticos para este cliente en este momento de su vida.
@@ -174,7 +182,7 @@ Prioriza siempre los problemas de mayor impacto estructural sobre el portafolio,
    - diversificación internacional insuficiente
    - exceso o falta de exposición a bloques patrimoniales clave
    - baja resiliencia estructural
-   - gap de ingresos pasivos vs. objetivo del cliente
+   - gap de ingresos pasivos vs. objetivo del cliente (solo si flujo > 500)
 
 3. Uso ineficiente del capital
    - exceso de liquidez
@@ -225,18 +233,6 @@ debe reflejar implícitamente su nivel de severidad:
 El lenguaje y el tono deben transmitir esta diferencia al cliente no técnico.
 
 
-ANÁLISIS DE GAP DE INGRESOS PASIVOS
-
-Si el objetivo del cliente es generar ingresos pasivos y tiene declarado un
-flujo_mensual_requerido_usd mayor a cero, evalúa si el portafolio puede generarlo:
-
-- Estima la capacidad aproximada de generación de ingresos del portafolio financiero
-  (excluyendo inmobiliario), asumiendo una tasa de distribución razonable para el perfil.
-- Si el gap entre la capacidad estimada y el flujo requerido es relevante (>30%),
-  es una ineficiencia prioritaria, independiente de la geografía o la moneda.
-- Cuando este gap existe, debe aparecer entre las 3 ineficiencias priorizadas.
-
-
 NIVEL DE RECOMENDACIÓN PERMITIDO
 
 Debes entregar únicamente recomendaciones de nivel estructural:
@@ -252,27 +248,71 @@ Solo puedes mencionar productos, fondos o bloques específicos de forma excepcio
 secundaria, si eso ayuda a ilustrar una concentración o una dependencia relevante.
 
 
-CUANTIFICACIÓN EN ACCIONES
+CUANTIFICACIÓN EN ACCIONES Y CONCENTRACIONES
 
-Las acciones recomendadas deben incluir referencias a magnitudes concretas derivadas
-de los datos del portafolio cuando sea posible:
+REGLA OBLIGATORIA: toda concentración geográfica relevante debe expresarse siempre
+en USD además del porcentaje. Calcular multiplicando el porcentaje por el patrimonio invertible.
 
-Correcto:
-"Redirigir los nuevos flujos disponibles hacia activos internacionales hasta reducir
-la exposición a Perú al rango objetivo. Con el ahorro mensual disponible declarado,
-esto puede lograrse gradualmente sin necesidad de vender activos existentes."
+Ejemplos correctos:
+- "Perú representa 69% del portafolio (≈ USD 1.1M de USD 1.6M invertible)"
+- "USD 844k — más de la mitad del patrimonio — están en un solo país"
+- "El exceso sobre el rango máximo equivale a ≈ USD 720k que deberían migrar gradualmente"
 
-Correcto:
-"El bloque de cash representa un porcentaje del patrimonio por encima del rango
-objetivo para el perfil; una parte puede reasignarse gradualmente hacia instrumentos
-de mayor eficiencia manteniendo un colchón de liquidez explícito."
+Ejemplo incorrecto:
+- "Perú representa 69% del portafolio, muy por encima del máximo permitido"
 
-Incorrecto: "Aumentar diversificación internacional."
-Incorrecto: "Reducir el cash."
+Las acciones también deben incluir referencias a magnitudes concretas:
+- "Redirigir el ahorro mensual (USD X/mes) hacia activos internacionales..."
+- "El bloque de cash (≈ USD X) está por encima del rango objetivo..."
 
 Las cifras deben venir de los datos del portafolio e input, nunca inventadas.
 No incluyas montos exactos de producto o asignaciones específicas de implementación:
 eso es responsabilidad del asesor en la etapa de propuesta.
+
+
+REGLA DE ACCIONES — EXACTAMENTE 1 POR INEFICIENCIA
+
+Cada ineficiencia debe tener exactamente 1 acción recomendada.
+Solo incluir 2 acciones si son genuinamente independientes entre sí — es decir,
+si la primera no es condición ni consecuencia lógica de la segunda.
+Cuando tengas dudas, colapsar en 1 sola acción más completa y directa.
+
+Incorrecto (dos acciones que son la misma cosa dicha de dos formas):
+- "No incrementar exposición a Perú."
+- "Dirigir nuevo capital hacia activos internacionales."
+
+Correcto (una sola acción que integra ambas ideas):
+- "Desde ahora, redirigir todo nuevo capital y flujos de vencimiento hacia activos
+  internacionales — sin nuevas posiciones en Perú — hasta acercarse al rango objetivo."
+
+
+TÍTULOS DE INEFICIENCIAS — LENGUAJE SIMPLE Y DIRECTO
+
+Los títulos de cada ineficiencia deben ser comprensibles por un cliente sin conocimiento
+financiero. Evitar completamente términos técnicos en los títulos.
+
+PROHIBIDO en títulos:
+- "Iliquidez estructural"
+- "Riesgo fuera de rango"
+- "Desalineación por bloques"
+- "Concentración por drivers"
+- "Política de moneda"
+- "Rebalanceo"
+- "Asignación estratégica"
+- "Apuestas puntuales"
+- "Score de alineación"
+
+PERMITIDO — ejemplos de títulos claros:
+- "Demasiado dinero en Perú y poco en el resto del mundo"
+- "Tu dinero está trabado en activos difíciles de vender"
+- "Tus inversiones dependen de muy pocas apuestas"
+- "Tienes demasiado en propiedades y poco en inversiones financieras"
+- "El portafolio no está generando el flujo mensual que necesitas"
+- "Tus ahorros en soles están desprotegidos ante movimientos del dólar"
+- "Más de la mitad de tu patrimonio no puede moverse rápido si lo necesitas"
+
+El título debe describir el problema en términos de consecuencia real para el cliente,
+no en términos técnicos de análisis de portafolio.
 
 
 TESIS CENTRAL DEL DIAGNÓSTICO
@@ -294,7 +334,7 @@ CRITERIOS DE CALIDAD DEL DIAGNÓSTICO
 
 El diagnóstico debe:
 - ser claro, sobrio y profesional
-- sonar a consultoría patrimonial institucional, no a academia
+- ser comprensible para alguien sin conocimiento financiero
 - ser consistente con el perfil de riesgo del cliente
 - evitar contradicciones entre fortalezas, ineficiencias y acciones
 - priorizar cambios de arquitectura, no cambios cosméticos
@@ -304,6 +344,7 @@ El diagnóstico debe:
 - evitar repetir literalmente observaciones del input
 - evitar listar datos sin interpretarlos
 - transmitir implícitamente la severidad de cada ineficiencia en su redacción
+- usar siempre montos en USD junto a los porcentajes en concentraciones relevantes
 
 
 FORTALEZAS
@@ -327,10 +368,10 @@ INEFICIENCIAS
 Debes identificar exactamente 3 ineficiencias principales, ordenadas de mayor a menor prioridad.
 
 Cada ineficiencia debe tener:
-- un título claro
-- una explicación de qué está pasando (con magnitudes cuando sea posible)
+- un título claro en lenguaje simple (sin tecnicismos — ver regla de títulos)
+- una explicación de qué está pasando (con magnitudes en USD cuando sea posible)
 - una explicación de por qué importa estratégicamente para este cliente
-- 1 o 2 acciones recomendadas de carácter estructural con referencias cuantitativas
+- exactamente 1 acción recomendada (excepcionalmente 2 si son genuinamente independientes)
 
 Las ineficiencias deben ser estructurales, accionables, relevantes para el patrimonio,
 independientes entre sí y consistentes con la tesis central.
@@ -343,16 +384,8 @@ Cada foco corresponde directamente a una de las 3 ineficiencias y la resume
 de forma visual y ejecutiva, comprensible de un vistazo por un cliente no técnico.
 
 Cada foco debe tener:
-- título corto y directo (máximo 6 palabras)
+- título corto y directo (máximo 6 palabras, en lenguaje simple)
 - descripción breve que sintetice el impacto en una frase clara
-
-Ejemplos válidos:
-- título: "Alta concentración en Perú"
-  descripcion: "Dependencia a un solo entorno sin mejora en retorno esperado."
-- título: "Gap de ingresos pasivos"
-  descripcion: "El portafolio actual no genera el flujo mensual que necesitas."
-- título: "Exceso de cash sin aporte estructural"
-  descripcion: "Capital ocioso que no protege y no diversifica."
 
 
 PLAN DE ACCIÓN PRIORIZADO
@@ -363,11 +396,9 @@ Cada acción corresponde directamente a uno de los 3 focos de mejora.
 Cada acción priorizada debe tener:
 - número de orden (1, 2 o 3)
 - título corto y accionable (máximo 5 palabras)
-- lista de 2 a 3 pasos concretos de ejecución
+- lista de 2 a 3 pasos concretos de ejecución con referencias a magnitudes del portafolio
 
-Los pasos deben ser específicos con referencias a magnitudes del portafolio,
-coherentes con el nivel estructural, realistas y graduales, orientados a nuevos
-flujos o reasignaciones. No incluir nombres de productos ni montos exactos de asignación.
+Los pasos NO deben incluir nombres de productos específicos ni montos exactos de asignación.
 
 
 FORMATO DE SALIDA OBLIGATORIO
@@ -395,21 +426,21 @@ La estructura del JSON debe ser EXACTAMENTE esta:
      "titulo": "string",
      "que_esta_pasando": "string",
      "por_que_importa": "string",
-     "acciones_recomendadas": ["string", "string"]
+     "acciones_recomendadas": ["string"]
    },
    {
      "orden": 2,
      "titulo": "string",
      "que_esta_pasando": "string",
      "por_que_importa": "string",
-     "acciones_recomendadas": ["string", "string"]
+     "acciones_recomendadas": ["string"]
    },
    {
      "orden": 3,
      "titulo": "string",
      "que_esta_pasando": "string",
      "por_que_importa": "string",
-     "acciones_recomendadas": ["string", "string"]
+     "acciones_recomendadas": ["string"]
    }
  ],
  "focos_de_mejora": [
@@ -428,12 +459,12 @@ La estructura del JSON debe ser EXACTAMENTE esta:
 
 REGLAS ADICIONALES DE OUTPUT
 
-- contexto_resumen debe extraerse de contexto_cliente del input. Si flujo_mensual_requerido_usd
-  es null o no aplica, usar 0.
+- contexto_resumen debe extraerse de contexto_cliente del input.
+  Si flujo_mensual_requerido_usd es null o no aplica, usar 0.
 - tesis_central debe ser una síntesis ejecutiva de 1-3 frases.
 - mensaje_final no debe repetir textualmente la tesis central.
 - El JSON debe ser consistente internamente.
-- Si una recomendación depende de crecimiento futuro o nuevos flujos, exprésalo claramente.
+- acciones_recomendadas puede tener 1 o 2 elementos. Por defecto usar 1.
 - Los pasos del plan NO deben incluir nombres de productos específicos ni montos exactos.
 """
 
