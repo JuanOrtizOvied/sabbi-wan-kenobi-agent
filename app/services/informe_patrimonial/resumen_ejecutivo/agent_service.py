@@ -345,7 +345,7 @@ class AgentService:
             cleanup_uploaded_file: bool = True,
     ) -> AgentReply:
         """
-        Runs the agent and returns the generated 'Calidad de Portafolio' section.
+        Runs the agent and returns the generated Resumen Ejecutivo.
 
         previous_response_id:
           - None for the first message
