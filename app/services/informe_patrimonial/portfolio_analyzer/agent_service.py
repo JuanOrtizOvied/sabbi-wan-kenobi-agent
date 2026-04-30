@@ -442,6 +442,12 @@ REGLAS ADICIONALES DE OUTPUT
 
 
 @dataclass(frozen=True, slots=True)
+class ContextoResumen:
+    """Summary context extracted from client data for downstream agents."""
+    objetivo_principal: str
+    flujo_mensual_requerido_usd: float
+
+@dataclass(frozen=True, slots=True)
 class Fortaleza:
     """A single portfolio strength."""
     titulo: str
@@ -481,6 +487,7 @@ class DiagnosticoEjecutivo:
 
     Maps 1-to-1 with the JSON schema defined in ANALYST_PROMPT.
     """
+    contexto_resumen: ContextoResumen
     tesis_central: str
     fortalezas: list[Fortaleza]
     ineficiencias_priorizadas: list[IneficienciaPriorizada]
@@ -493,7 +500,12 @@ class DiagnosticoEjecutivo:
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> DiagnosticoEjecutivo:
         """Build a *DiagnosticoEjecutivo* from the raw dict returned by the agent."""
+        ctx = data.get("contexto_resumen", {})
         return cls(
+            contexto_resumen=ContextoResumen(
+                objetivo_principal=ctx.get("objetivo_principal", ""),
+                flujo_mensual_requerido_usd=ctx.get("flujo_mensual_requerido_usd", 0),
+            ),
             tesis_central=data["tesis_central"],
             fortalezas=[
                 Fortaleza(
@@ -534,6 +546,10 @@ class DiagnosticoEjecutivo:
     def to_dict(self) -> dict[str, Any]:
         """Serialise back to a plain dict matching the original JSON schema."""
         return {
+            "contexto_resumen": {
+                "objetivo_principal": self.contexto_resumen.objetivo_principal,
+                "flujo_mensual_requerido_usd": self.contexto_resumen.flujo_mensual_requerido_usd,
+            },
             "tesis_central": self.tesis_central,
             "fortalezas": [
                 {"titulo": f.titulo, "explicacion": f.explicacion}
