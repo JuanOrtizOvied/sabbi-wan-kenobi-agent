@@ -8,4 +8,6 @@ sqlalchemy
 greenlet
 openpyxl
 
+anthropic
+
 asyncpg

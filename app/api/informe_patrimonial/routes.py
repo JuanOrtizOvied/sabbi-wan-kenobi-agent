@@ -8,19 +8,24 @@ from fastapi.responses import Response
 from app.api.informe_patrimonial.schemas import ChatRequest, ChatResponse
 from app.services.informe_patrimonial.calidad_portafolio.agent_service import AgentService
 from app.services.informe_patrimonial.riesgo_estructural.agent_service import AgentService as StructuralRiskAgentService
-from app.services.informe_patrimonial.resumen_ejecutivo.agent_service import AgentService as ResumenEjecutivoAgentService
+from app.services.informe_patrimonial.resumen_ejecutivo.agent_service import \
+    AgentService as ResumenEjecutivoAgentService
 from app.services.informe_patrimonial.costos.agent_service import AgentService as CostosAgentService
-from app.services.informe_patrimonial.portfolio_analyzer.agent_service import PortfolioAnalystService as PortfolioAnalyzerAgentService
+from app.services.informe_patrimonial.portfolio_analyzer.agent_service import \
+    PortfolioAnalystService as PortfolioAnalyzerAgentService
+from app.services.informe_patrimonial.portfolio_analyzer.anthropic_agent_service import (
+    PortfolioAnalyzerService as PortfolioAnalyzerAnthropicAgentService)
 
 from openpyxl import Workbook
 
 from .calidad_portafolio.schemas import ReportRequest
 from .riesgo_estructural.schemas import StructuralRiskData
 from .portfolio.schemas import PortafolioItem
-from app.services.informe_patrimonial.calidad_portafolio.excel import build_asset_sheet, build_risk_sheet, build_geo_sheet
+from app.services.informe_patrimonial.calidad_portafolio.excel import build_asset_sheet, build_risk_sheet, \
+    build_geo_sheet
 from app.services.informe_patrimonial.riesgo_estructural.excel import build_structural_risk_excel
 from app.services.informe_patrimonial.portfolio.excel import generate_portfolio_excel
-
+from app.api.informe_patrimonial.portfolio_analyzer.schemas import PortfolioAnalyzerResponse, PortfolioAnalyzerRequest
 
 informe_patrimonial_router = APIRouter()
 agent = AgentService()
@@ -28,6 +33,7 @@ structural_risk_agent = StructuralRiskAgentService()
 resumen_ejecutivo_agent = ResumenEjecutivoAgentService()
 costos_agent = CostosAgentService()
 portfolio_analyzer_agent = PortfolioAnalyzerAgentService()
+portfolio_analyzer_anthropic_agent = PortfolioAnalyzerAnthropicAgentService()
 
 
 @informe_patrimonial_router.post("/calidad-portafolio", response_model=ChatResponse)
@@ -74,6 +80,30 @@ def chat(req: ChatRequest) -> ChatResponse:
             previous_response_id=req.previous_response_id,
         )
         return ChatResponse(reply=out.diagnostico.to_dict(), response_id=out.response_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ANTHROPIC
+@informe_patrimonial_router.post(
+    "/anthropic/portfolio-analyzer",
+    response_model=PortfolioAnalyzerResponse,
+)
+async def portfolio_analyzer(req: ChatRequest):
+    """
+    Analyze a client's investment portfolio and return a structured
+    executive diagnostic (DiagnosticoEjecutivo) using the Anthropic API.
+    """
+    try:
+        reply = portfolio_analyzer_anthropic_agent.analyze(json_data=req.json_data)
+
+        return PortfolioAnalyzerResponse(
+            diagnostico=reply.diagnostico.to_dict(),
+            message_id=reply.message_id,
+        )
+
+    except (TypeError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

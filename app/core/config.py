@@ -28,6 +28,7 @@ class Settings:
     OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     SABBI_EXPERTO_OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4.1")
     SABBI_VECTOR_STORE_ID: str = os.getenv("SABBI_VECTOR_STORE_ID", "")
+    ANTHROPIC_API_KEY: str = os.getenv("ANTHROPIC_API_KEY", "")
 
 
 settings = Settings()
