@@ -15,9 +15,10 @@ WORKDIR /app
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
+# Log dirs with symlinks to stdout/stderr so `docker logs` works
 RUN mkdir -p /var/log/wan-kenobi/gunicorn \
-    && touch /var/log/wan-kenobi/gunicorn/access.log \
-    && touch /var/log/wan-kenobi/gunicorn/error.log
+    && ln -sf /dev/stdout /var/log/wan-kenobi/gunicorn/access.log \
+    && ln -sf /dev/stderr /var/log/wan-kenobi/gunicorn/error.log
 
 # Copy application code
 COPY . /app
@@ -25,14 +26,16 @@ COPY . /app
 EXPOSE 3000
 
 # ---- Production server ----
-# Tune workers via env var WEB_CONCURRENCY (common pattern).
-# Use --preload only if your startup is fast and safe to preload.
+# GUNICORN_TIMEOUT  = 600 (10 min) to handle long Anthropic Opus calls
+# GUNICORN_GRACEFUL = 620  so in-flight requests finish before forced kill
+# GUNICORN_KEEPALIVE = 75  to survive upstream proxy idle timeouts
 CMD ["sh", "-c", "gunicorn -k uvicorn.workers.UvicornWorker main:app \
   --bind 0.0.0.0:3000 \
   --workers ${WEB_CONCURRENCY:-2} \
   --threads ${GUNICORN_THREADS:-1} \
-  --timeout ${GUNICORN_TIMEOUT:-60} \
-  --graceful-timeout ${GUNICORN_GRACEFUL_TIMEOUT:-30} \
-  --keep-alive ${GUNICORN_KEEPALIVE:-5} \
+  --timeout ${GUNICORN_TIMEOUT:-600} \
+  --graceful-timeout ${GUNICORN_GRACEFUL_TIMEOUT:-620} \
+  --keep-alive ${GUNICORN_KEEPALIVE:-75} \
   --access-logfile /var/log/wan-kenobi/gunicorn/access.log \
-  --error-logfile /var/log/wan-kenobi/gunicorn/error.log"]
+  --error-logfile /var/log/wan-kenobi/gunicorn/error.log \
+  --log-level ${GUNICORN_LOG_LEVEL:-info}"]
