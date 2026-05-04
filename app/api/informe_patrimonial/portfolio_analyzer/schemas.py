@@ -75,7 +75,7 @@ class PortfolioAnalyzerResponse(BaseModel):
     """
     Response body for POST /portfolio-analyzer.
     """
-    diagnostico: DiagnosticoEjecutivoOut
+    reply: DiagnosticoEjecutivoOut
     message_id: str = Field(
         ...,
         description="Anthropic message ID for tracing / auditing.",
