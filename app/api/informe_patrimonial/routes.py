@@ -15,6 +15,7 @@ from app.services.informe_patrimonial.portfolio_analyzer.agent_service import \
     PortfolioAnalystService as PortfolioAnalyzerAgentService
 from app.services.informe_patrimonial.portfolio_analyzer.anthropic_agent_service import (
     PortfolioAnalyzerService as PortfolioAnalyzerAnthropicAgentService)
+from app.services.informe_patrimonial.resumen_ejecutivo.anthropic_agent_service import AgentService as ResumenEjecutivoAnthropicAgent
 
 from openpyxl import Workbook
 
@@ -34,6 +35,7 @@ resumen_ejecutivo_agent = ResumenEjecutivoAgentService()
 costos_agent = CostosAgentService()
 portfolio_analyzer_agent = PortfolioAnalyzerAgentService()
 portfolio_analyzer_anthropic_agent = PortfolioAnalyzerAnthropicAgentService()
+resumen_ejecutivo_anthropic_agent = ResumenEjecutivoAnthropicAgent()
 
 
 @informe_patrimonial_router.post("/calidad-portafolio", response_model=ChatResponse)
@@ -68,6 +70,17 @@ def chat(req: ChatRequest) -> ChatResponse:
             previous_response_id=req.previous_response_id,
         )
         return ChatResponse(reply=out.result, response_id=out.response_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@informe_patrimonial_router.post("/anthropic/resumen-ejecutivo", response_model=ChatResponse)
+def chat(req: ChatRequest) -> ChatResponse:
+    try:
+        out = resumen_ejecutivo_anthropic_agent.reply(
+            json_data=req.json_data,
+        )
+        return ChatResponse(reply=out.result, response_id=out.message_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
