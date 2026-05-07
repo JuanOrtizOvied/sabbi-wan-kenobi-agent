@@ -29,13 +29,10 @@ Tu tarea es interpretar el input y redactar únicamente la sección "Calidad de 
 
 Debes completar exactamente los siguientes campos del output:
 1. calidad_portafolio_description
-2. alineacion_activo_title
-3. alineacion_activo_description
-4. alineacion_riesgo_title
-5. alineacion_riesgo_description
-6. alineacion_geografica_title
-7. alineacion_geografica_description
-8. conclusions
+2. alineacion_activo_description
+3. alineacion_riesgo_description
+4. alineacion_geografica_description
+5. conclusions
 
 NOTA SOBRE EL SCORE DE CALIDAD DE PORTAFOLIO
 
@@ -45,44 +42,6 @@ El score de calidad de portafolio se calcula utilizando tres dimensiones con las
 - Alineación geográfica: 20%
 
 Usa estas ponderaciones para contextualizar la importancia relativa de cada dimensión al interpretar el score global.
-
-TÍTULOS FIJOS POR SCORE — REGLA IMPORTANTE
-
-Los campos alineacion_activo_title y alineacion_geografica_title deben usar
-EXACTAMENTE los títulos fijos definidos abajo según el score correspondiente.
-No los modifiques ni los reescribas.
-
-El campo alineacion_riesgo_title debe generarse según la instrucción específica
-para ese campo (ver sección ESTRUCTURA OBLIGATORIA).
-
-TÍTULOS FIJOS — Alineación por tipo de activo:
-  Score 1–2.99  → "Estructura crítica y altamente desbalanceada, con impacto en la resiliencia"
-  Score 3–4.99  → "Estructura desalineada, con riesgos relevantes en la distribución de activos"
-  Score 5–6.99  → "Estructura funcional, pero con desbalances que reducen eficiencia y diversificación"
-  Score 7–8.99  → "Estructura sólida y bien balanceada, con desbalances menores no críticos"
-  Score 9–10    → "Estructura altamente optimizada, con asignación eficiente entre clases de activo"
-
-TÍTULOS FIJOS — Alineación geográfica:
-  Score 1–2.99  → "Dependencia extrema de un solo país o región"
-  Score 3–4.99  → "Alta concentración geográfica"
-  Score 5–6.99  → "Alta concentración geográfica"
-  Score 7–8.99  → "Concentración relevante en una región"
-  Score 9–10    → "Diversificación geográfica adecuada"
-
-TEXTOS FIJOS — Alineación de riesgo (para el campo alineacion_riesgo_title):
-  Score 10      → "Riesgo ideal: calibrado exactamente para tu perfil"
-  Score 9       → "Riesgo bien calibrado y coherente con tus objetivos"
-  Score 8       → "Riesgo en rango, con margen de mejora en sus fuentes"
-  Score 7       → "Riesgo controlado, aunque con fuentes concentradas"
-  Score 6       → "Riesgo ligeramente fuera de rango: hay ajuste posible"
-  Score 5       → "Riesgo con desajuste claro respecto a tu perfil"
-  Score 4       → "El riesgo no encaja con lo que declaraste tolerar"
-  Score 3       → "El portafolio asume mucho más (o menos) riesgo del adecuado"
-  Score 2       → "El riesgo está fuera de control para tu perfil"
-  Score 1       → "El riesgo supera ampliamente tu tolerancia declarada"
-
-  Regla: usar el score entero (floor) de alineacion_riesgo.score para seleccionar el texto.
-  Copiar el texto exactamente como aparece arriba — no modificar.
 
 ESTRUCTURA DEL INPUT
 
@@ -294,9 +253,8 @@ Reglas de marcado:
 - No anides más de dos etiquetas
 - Usa <bullet>•</bullet> solo en fields que requieren lista
 - No uses bullets en párrafos corridos
-- Los campos de título (*_title) deben ser texto plano sin etiquetas de marcado
 
-ESTRUCTURA OBLIGATORIA DE LOS 8 CAMPOS
+ESTRUCTURA OBLIGATORIA DE LOS 5 CAMPOS
 
 1) calidad_portafolio_description
 - Un solo párrafo corto
@@ -304,40 +262,27 @@ ESTRUCTURA OBLIGATORIA DE LOS 8 CAMPOS
 - Debe mencionar de forma fluida mezcla de activos, alineación de riesgo y diversificación geográfica
 - No debe adelantar toda la conclusión final
 
-2) alineacion_activo_title
-- USAR EXACTAMENTE el título fijo definido en USER_INSTRUCTION según el score de alineacion_activos
-- No modificar ni reescribir
-
-3) alineacion_activo_description
+2) alineacion_activo_description
 - 1 o 2 párrafos cortos
 - Explica los principales sobrepesos o subpesos relevantes
 - Enfatiza impacto en diversificación, resiliencia y eficiencia estructural
 - No listar todos los activos; seleccionar solo lo importante
 - Sin tecnicismos (ver regla de lenguaje)
 
-4) alineacion_riesgo_title
-- USAR EXACTAMENTE el texto fijo definido en USER_INSTRUCTION según el score de alineacion_riesgo
-  (usar floor del score para seleccionar el texto)
-- No modificar ni reescribir
-
-5) alineacion_riesgo_description
+3) alineacion_riesgo_description
 - 1 o 2 párrafos cortos
 - Explica si el portafolio está tomando más o menos riesgo del que corresponde al perfil
 - Explica de dónde viene ese riesgo (concentración, tipo de activos, etc.) en lenguaje simple
 - Menciona la consecuencia práctica si no se corrige
 - Sin tecnicismos
 
-6) alineacion_geografica_title
-- USAR EXACTAMENTE el título fijo definido en USER_INSTRUCTION según el score de alineacion_geografica
-- No modificar ni reescribir
-
-7) alineacion_geografica_description
+4) alineacion_geografica_description
 - 1 o 2 párrafos
 - Explica concentración regional, subexposición relevante y riesgo país en lenguaje simple
 - Debe ser claro por qué la diversificación geográfica importa para este cliente
 - No alarmista
 
-8) conclusions
+5) conclusions
 - Exactamente 3 bullets
 - Cada bullet debe comenzar con <bullet>•</bullet>
 - Bullet 1: qué está razonablemente bien construido (específico, no genérico)
@@ -362,11 +307,8 @@ La sección final debe:
 class CalidadPortafolioOutput(BaseModel):
     calidad_portafolio_description: str
     alineacion_activo_description: str
-    alineacion_activo_title: str
     alineacion_riesgo_description: str
-    alineacion_riesgo_title: str
     alineacion_geografica_description: str
-    alineacion_geografica_title: str
     conclusions: str
 
 
