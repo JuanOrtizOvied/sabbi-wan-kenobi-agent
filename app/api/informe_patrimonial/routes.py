@@ -13,6 +13,7 @@ from app.services.informe_patrimonial.riesgo_estructural.anthropic_agent_service
 from app.services.informe_patrimonial.resumen_ejecutivo.agent_service import \
     AgentService as ResumenEjecutivoAgentService
 from app.services.informe_patrimonial.costos.agent_service import AgentService as CostosAgentService
+from app.services.informe_patrimonial.costos.anthropic_agent_service import AgentService as CostosAnthropicAgentService
 from app.services.informe_patrimonial.portfolio_analyzer.agent_service import \
     PortfolioAnalystService as PortfolioAnalyzerAgentService
 from app.services.informe_patrimonial.portfolio_analyzer.anthropic_agent_service import (
@@ -28,7 +29,7 @@ from app.services.informe_patrimonial.calidad_portafolio.excel import build_asse
     build_geo_sheet
 from app.services.informe_patrimonial.riesgo_estructural.excel import build_structural_risk_excel
 from app.services.informe_patrimonial.portfolio.excel import generate_portfolio_excel
-from app.api.informe_patrimonial.portfolio_analyzer.schemas import PortfolioAnalyzerResponse, PortfolioAnalyzerRequest
+from app.api.informe_patrimonial.portfolio_analyzer.schemas import PortfolioAnalyzerResponse
 
 informe_patrimonial_router = APIRouter()
 agent = AgentService()
@@ -37,6 +38,7 @@ structural_risk_agent = StructuralRiskAgentService()
 structural_risk_anthropic_agent = StructuralRiskAgentServiceAnthropic()
 resumen_ejecutivo_agent = ResumenEjecutivoAgentService()
 costos_agent = CostosAgentService()
+costos_anthropic_agent = CostosAnthropicAgentService()
 portfolio_analyzer_agent = PortfolioAnalyzerAgentService()
 portfolio_analyzer_anthropic_agent = PortfolioAnalyzerAnthropicAgentService()
 resumen_ejecutivo_anthropic_agent = ResumenEjecutivoAnthropicAgent()
@@ -154,6 +156,17 @@ def chat(req: ChatRequest) -> ChatResponse:
         out = costos_agent.reply(
             json_data=req.json_data,
             previous_response_id=req.previous_response_id,
+        )
+        return ChatResponse(reply=out.output, response_id=out.response_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@informe_patrimonial_router.post("/anthropic/costos", response_model=ChatResponse)
+def chat(req: ChatRequest) -> ChatResponse:
+    try:
+        out = costos_anthropic_agent.reply(
+            json_data=req.json_data,
         )
         return ChatResponse(reply=out.output, response_id=out.response_id)
     except Exception as e:
