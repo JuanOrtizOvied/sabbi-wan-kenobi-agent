@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Final, Mapping, Optional
 
 import anthropic
+from pydantic import BaseModel
 
 from app.core.config import settings
 
@@ -463,55 +464,51 @@ REGLAS ADICIONALES DE OUTPUT
 """
 
 
-# ── Output dataclasses ────────────────────────────────────────────────
+# ── Pydantic output models ───────────────────────────────────────────
 
 
-@dataclass(frozen=True, slots=True)
-class ContextoResumen:
+class ContextoResumen(BaseModel):
     """Summary context extracted from client data for downstream agents."""
     objetivo_principal: str
     flujo_mensual_requerido_usd: float
 
 
-@dataclass(frozen=True, slots=True)
-class Fortaleza:
+class Fortaleza(BaseModel):
     """A single portfolio strength."""
     titulo: str
     explicacion: str
 
 
-@dataclass(frozen=True, slots=True)
-class IneficienciaPriorizada:
+class IneficienciaPriorizada(BaseModel):
     """A single prioritised inefficiency with recommended actions."""
     orden: int
     titulo: str
     que_esta_pasando: str
     por_que_importa: str
-    acciones_recomendadas: list[str] = field(default_factory=list)
+    acciones_recomendadas: list[str]
 
 
-@dataclass(frozen=True, slots=True)
-class FocoDeMejora:
+class FocoDeMejora(BaseModel):
     """Executive-level improvement focus derived from an inefficiency."""
     orden: int
     titulo: str
     descripcion: str
 
 
-@dataclass(frozen=True, slots=True)
-class AccionPriorizada:
+class AccionPriorizada(BaseModel):
     """A single prioritised action with concrete execution steps."""
     orden: int
     titulo: str
-    pasos: list[str] = field(default_factory=list)
+    pasos: list[str]
 
 
-@dataclass(frozen=True, slots=True)
-class DiagnosticoEjecutivo:
+class DiagnosticoEjecutivo(BaseModel):
     """
     Top-level structured output returned by the portfolio analyst agent.
 
     Maps 1-to-1 with the JSON schema defined in ANALYST_PROMPT.
+    Uses Pydantic so it can be passed directly to messages.parse()
+    for guaranteed schema compliance via constrained decoding.
     """
     contexto_resumen: ContextoResumen
     tesis_central: str
@@ -521,95 +518,6 @@ class DiagnosticoEjecutivo:
     plan_de_accion_priorizado: list[AccionPriorizada]
     mensaje_final: str
 
-    # ── Factories ──────────────────────────────────────────────────
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> DiagnosticoEjecutivo:
-        """Build a *DiagnosticoEjecutivo* from the raw dict returned by the agent."""
-        ctx = data.get("contexto_resumen", {})
-        return cls(
-            contexto_resumen=ContextoResumen(
-                objetivo_principal=ctx.get("objetivo_principal", ""),
-                flujo_mensual_requerido_usd=ctx.get("flujo_mensual_requerido_usd", 0),
-            ),
-            tesis_central=data["tesis_central"],
-            fortalezas=[
-                Fortaleza(
-                    titulo=f["titulo"],
-                    explicacion=f["explicacion"],
-                )
-                for f in data["fortalezas"]
-            ],
-            ineficiencias_priorizadas=[
-                IneficienciaPriorizada(
-                    orden=i["orden"],
-                    titulo=i["titulo"],
-                    que_esta_pasando=i["que_esta_pasando"],
-                    por_que_importa=i["por_que_importa"],
-                    acciones_recomendadas=list(i.get("acciones_recomendadas", [])),
-                )
-                for i in data["ineficiencias_priorizadas"]
-            ],
-            focos_de_mejora=[
-                FocoDeMejora(
-                    orden=fm["orden"],
-                    titulo=fm["titulo"],
-                    descripcion=fm["descripcion"],
-                )
-                for fm in data["focos_de_mejora"]
-            ],
-            plan_de_accion_priorizado=[
-                AccionPriorizada(
-                    orden=ap["orden"],
-                    titulo=ap["titulo"],
-                    pasos=list(ap.get("pasos", [])),
-                )
-                for ap in data["plan_de_accion_priorizado"]
-            ],
-            mensaje_final=data["mensaje_final"],
-        )
-
-    def to_dict(self) -> dict[str, Any]:
-        """Serialise back to a plain dict matching the original JSON schema."""
-        return {
-            "contexto_resumen": {
-                "objetivo_principal": self.contexto_resumen.objetivo_principal,
-                "flujo_mensual_requerido_usd": self.contexto_resumen.flujo_mensual_requerido_usd,
-            },
-            "tesis_central": self.tesis_central,
-            "fortalezas": [
-                {"titulo": f.titulo, "explicacion": f.explicacion}
-                for f in self.fortalezas
-            ],
-            "ineficiencias_priorizadas": [
-                {
-                    "orden": i.orden,
-                    "titulo": i.titulo,
-                    "que_esta_pasando": i.que_esta_pasando,
-                    "por_que_importa": i.por_que_importa,
-                    "acciones_recomendadas": i.acciones_recomendadas,
-                }
-                for i in self.ineficiencias_priorizadas
-            ],
-            "focos_de_mejora": [
-                {
-                    "orden": fm.orden,
-                    "titulo": fm.titulo,
-                    "descripcion": fm.descripcion,
-                }
-                for fm in self.focos_de_mejora
-            ],
-            "plan_de_accion_priorizado": [
-                {
-                    "orden": ap.orden,
-                    "titulo": ap.titulo,
-                    "pasos": ap.pasos,
-                }
-                for ap in self.plan_de_accion_priorizado
-            ],
-            "mensaje_final": self.mensaje_final,
-        }
-
 
 # ── Reply wrapper ─────────────────────────────────────────────────────
 
@@ -617,7 +525,7 @@ class DiagnosticoEjecutivo:
 @dataclass(frozen=True, slots=True)
 class PortfolioAnalystReply:
     diagnostico: DiagnosticoEjecutivo
-    raw: str
+    raw: dict[str, Any]
     message_id: str
 
 
@@ -630,7 +538,12 @@ class PortfolioAnalyzerService:
     Service that uses the Anthropic Messages API to:
       - send portfolio JSON data as inline content
       - leverage extended thinking for the internal exploration phase
-      - parse and return the structured JSON diagnostic
+      - return a schema-guaranteed structured diagnostic via messages.parse()
+
+    Uses Pydantic-based structured output (constrained decoding) so the
+    response is guaranteed to match the DiagnosticoEjecutivo schema.
+    This eliminates manual JSON parsing, markdown fence stripping, and
+    the risk of malformed output.
     """
 
     def __init__(
@@ -665,8 +578,8 @@ class PortfolioAnalyzerService:
         """
         Build the full user message content.
 
-        Unlike OpenAI's file upload approach, Anthropic's Messages API
-        receives the data inline as text within the user message.
+        The portfolio JSON is embedded inline in the user message,
+        separated by clear delimiters for the model to parse.
         """
         portfolio_json = cls._serialize_portfolio(json_data)
         return (
@@ -675,51 +588,6 @@ class PortfolioAnalyzerService:
             f"{portfolio_json}\n"
             f"--- FIN DATOS DEL PORTAFOLIO ---"
         )
-
-    # ── Response parsing ─────────────────────────────────────────
-
-    @staticmethod
-    def _extract_text(message: anthropic.types.Message) -> str:
-        """
-        Extract the concatenated text from all TextBlock content blocks,
-        skipping thinking blocks.
-        """
-        parts: list[str] = []
-        for block in message.content:
-            if block.type == "text":
-                parts.append(block.text)
-        if not parts:
-            raise RuntimeError(
-                "Anthropic response contained no text blocks"
-            )
-        return "".join(parts)
-
-    @staticmethod
-    def _clean_json_text(raw: str) -> str:
-        """Strip markdown fences or surrounding whitespace from raw JSON."""
-        text = raw.strip()
-        if text.startswith("```"):
-            # Remove ```json ... ``` wrapping
-            first_newline = text.index("\n") if "\n" in text else 3
-            text = text[first_newline + 1:]
-            if text.endswith("```"):
-                text = text[:-3]
-            text = text.strip()
-        return text
-
-    @classmethod
-    def _parse_diagnostico(cls, raw_text: str) -> DiagnosticoEjecutivo:
-        """
-        Parse the model's raw text output into a DiagnosticoEjecutivo.
-        """
-        cleaned = cls._clean_json_text(raw_text)
-        try:
-            data = json.loads(cleaned)
-        except json.JSONDecodeError as exc:
-            raise ValueError(
-                f"Model output is not valid JSON: {exc}"
-            ) from exc
-        return DiagnosticoEjecutivo.from_dict(data)
 
     # ── Main entry point ─────────────────────────────────────────
 
@@ -731,12 +599,16 @@ class PortfolioAnalyzerService:
         Run the portfolio analysis via Anthropic's Messages API and
         return the structured diagnostic.
 
-        Uses extended thinking so the model can perform its internal
-        exploration phase (FASE 1) before producing the JSON output.
+        Uses extended thinking (adaptive) so the model can perform its
+        internal exploration phase (FASE 1) before producing the output.
+
+        Structured output via messages.parse() guarantees the response
+        matches the DiagnosticoEjecutivo Pydantic schema — no manual
+        JSON parsing or cleanup needed.
 
         Returns a PortfolioAnalystReply with:
-          - diagnostico: parsed DiagnosticoEjecutivo dataclass
-          - raw: original text output from the model
+          - diagnostico: parsed DiagnosticoEjecutivo (Pydantic model)
+          - raw: dict serialisation of the diagnostic for logging/storage
           - message_id: Anthropic message ID for tracing
         """
         if not isinstance(json_data, Mapping):
@@ -744,7 +616,7 @@ class PortfolioAnalyzerService:
 
         user_content = self._build_user_content(json_data)
 
-        message = self._client.messages.create(
+        response = self._client.messages.parse(
             model=self._model,
             max_tokens=self._max_tokens,
             system=ANALYST_PROMPT,
@@ -752,13 +624,17 @@ class PortfolioAnalyzerService:
             messages=[
                 {"role": "user", "content": user_content},
             ],
+            output_format=DiagnosticoEjecutivo,
         )
 
-        raw_text = self._extract_text(message)
-        diagnostico = self._parse_diagnostico(raw_text)
+        diagnostico = response.parsed_output
+        if not isinstance(diagnostico, DiagnosticoEjecutivo):
+            raise RuntimeError(
+                "Anthropic structured output returned an unexpected type"
+            )
 
         return PortfolioAnalystReply(
             diagnostico=diagnostico,
-            raw=raw_text,
-            message_id=message.id,
+            raw=diagnostico.model_dump(),
+            message_id=response.id,
         )
