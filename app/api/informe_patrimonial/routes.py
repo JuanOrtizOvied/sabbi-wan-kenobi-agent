@@ -140,7 +140,7 @@ async def portfolio_analyzer(req: ChatRequest):
         reply = portfolio_analyzer_anthropic_agent.analyze(json_data=req.json_data)
 
         return PortfolioAnalyzerResponse(
-            reply=reply.diagnostico.to_dict(),
+            reply=reply.diagnostico.model_dump(),
             message_id=reply.message_id,
         )
 
