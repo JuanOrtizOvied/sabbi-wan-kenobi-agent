@@ -11,7 +11,7 @@ from app.core.config import settings
 
 log = logging.getLogger(__name__)
 
-DEFAULT_MODEL: Final[str] = "claude-opus-4-6"
+DEFAULT_MODEL: Final[str] = "claude-sonnet-4-5-20250514"
 MAX_TOKENS: Final[int] = 8_192
 
 USER_INSTRUCTION: Final[str] = """\
