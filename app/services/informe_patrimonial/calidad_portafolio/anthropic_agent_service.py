@@ -12,7 +12,7 @@ from app.core.config import settings
 
 log = logging.getLogger(__name__)
 
-DEFAULT_MODEL: Final[str] = "claude-sonnet-4-5-20250514"
+DEFAULT_MODEL: Final[str] = "claude-sonnet-4-6"
 AGENT_NAME: Final[str] = "CalidadPortafolioAgent"
 THINKING_BUDGET_TOKENS: Final[int] = 10_000
 MAX_OUTPUT_TOKENS: Final[int] = 16_384

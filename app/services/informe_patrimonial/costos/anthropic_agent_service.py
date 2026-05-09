@@ -12,7 +12,7 @@ from app.core.config import settings
 
 log = logging.getLogger(__name__)
 
-DEFAULT_MODEL: Final[str] = "claude-sonnet-4-5-20250514"
+DEFAULT_MODEL: Final[str] = "claude-sonnet-4-6"
 MAX_TOKENS: Final[int] = 16_384
 
 USER_INSTRUCTION: Final[str] = """Analiza el archivo JSON del portafolio adjunto y genera un reporte estructurado de costos y comisiones.
