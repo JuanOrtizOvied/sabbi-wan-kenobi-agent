@@ -12,7 +12,7 @@ from app.core.config import settings
 log = logging.getLogger(__name__)
 
 DEFAULT_MODEL: Final[str] = "claude-sonnet-4-6"
-MAX_TOKENS: Final[int] = 8_192
+MAX_TOKENS: Final[int] = 16_384
 
 USER_INSTRUCTION: Final[str] = """\
 A continuación se adjunta un archivo JSON con el diagnóstico estructurado del portafolio de inversión de un cliente.
