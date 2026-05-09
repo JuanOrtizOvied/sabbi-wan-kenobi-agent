@@ -6,7 +6,8 @@ from typing import List
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from app.api.informe_patrimonial.schemas import ChatRequest, ChatResponse
-from app.services.informe_patrimonial.calidad_portafolio.agent_service import AgentService
+from app.services.informe_patrimonial.calidad_portafolio.agent_service import AgentService as AnthropicAgentServiceCalidad
+from app.services.informe_patrimonial.calidad_portafolio.anthropic_agent_service import AgentService
 from app.services.informe_patrimonial.riesgo_estructural.agent_service import AgentService as StructuralRiskAgentService
 from app.services.informe_patrimonial.resumen_ejecutivo.agent_service import \
     AgentService as ResumenEjecutivoAgentService
@@ -30,6 +31,7 @@ from app.api.informe_patrimonial.portfolio_analyzer.schemas import PortfolioAnal
 
 informe_patrimonial_router = APIRouter()
 agent = AgentService()
+anthropic_agent_service_calidad_portafolio = AnthropicAgentServiceCalidad()
 structural_risk_agent = StructuralRiskAgentService()
 resumen_ejecutivo_agent = ResumenEjecutivoAgentService()
 costos_agent = CostosAgentService()
@@ -42,6 +44,18 @@ resumen_ejecutivo_anthropic_agent = ResumenEjecutivoAnthropicAgent()
 def chat(req: ChatRequest) -> ChatResponse:
     try:
         out = agent.reply(
+            json_data=req.json_data,
+            previous_response_id=req.previous_response_id,
+        )
+        return ChatResponse(reply=out.parsed, response_id=out.response_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@informe_patrimonial_router.post("/anthropic/calidad-portafolio", response_model=ChatResponse)
+def chat(req: ChatRequest) -> ChatResponse:
+    try:
+        out = anthropic_agent_service_calidad_portafolio.reply(
             json_data=req.json_data,
             previous_response_id=req.previous_response_id,
         )
