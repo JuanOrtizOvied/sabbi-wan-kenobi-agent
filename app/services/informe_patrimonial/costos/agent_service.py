@@ -41,7 +41,7 @@ El reporte debe incluir la **Agrupación inteligente** (`grouped_output`):
 
 **Casos especiales**:
 - Si `comision_sin_igv` es `"0"` Y los productos son ahorro/cash/liquidez → nombre: `"Cash / ahorro"`
-- Si `comision_sin_igv` es `"0"` Y los productos NO son ahorro → nombre: `"Inversiones sin comisión (no cash)"`
+- Si `comision_sin_igv` es `"0"` Y los productos NO son ahorro → nombre: `"Activos sin comisión explícita"`
 - Si `comision_sin_igv` contiene múltiples valores (ej: "Clase A 1.75% - Clase B 1.05%"), extrae todos los porcentajes y usa el **más alto** como fee numérico (ej: 0.0175)
 
 **Regla de salida para `fee`**:
@@ -49,22 +49,59 @@ El reporte debe incluir la **Agrupación inteligente** (`grouped_output`):
 - Convierte porcentajes a decimal si es necesario (ej: 1.75% → 0.0175)
 - Si hay múltiples valores, usa el más alto convertido a decimal
 
+BENCHMARKS DE REFERENCIA POR TIPO DE PRODUCTO
+
+Usa esta tabla para identificar si algún fee está en el rango alto para su categoría.
+Esta información debe usarse ÚNICAMENTE para el campo lectura_ejecutiva, no para calcular costos.
+
+  Tipo de producto                            Rango típico de fee anual
+  Acciones en bolsa (via SAB/broker)          0.50% – 0.75%
+  Fondos mutuos renta fija                    0.50% – 1.00%
+  Fondos mutuos renta variable                0.75% – 1.50%
+  Notas estructuradas                         1.00% – 1.75%
+  Fondos de mercados privados (PE/crédito)    1.50% – 2.50%
+  Club deals / fondos inmobiliarios           1.50% – 3.00%
+  Depósitos a plazo / cash                    0%
+
+REGLA PARA lectura_ejecutiva
+
+La lectura ejecutiva debe seguir esta lógica condicional:
+
+Párrafo base (siempre incluir):
+"Con la información disponible, no se observan señales evidentes de sobrecostos estructurales
+frente a benchmarks comparables. Este análisis debe leerse como una evaluación de visibilidad
+y control de costos: no todos los costos 'all-in' pueden ser trazados con precisión hoy,
+especialmente en productos estructurados y alternativos."
+
+Línea adicional condicional 1 — incluir SI más del 30% del patrimonio invertible
+está en grupos con comisión cero (excluyendo cash):
+"Una parte relevante del patrimonio ([X]%) está en activos sin comisión explícita,
+lo que limita la visibilidad del costo total del portafolio."
+
+Línea adicional condicional 2 — incluir SI algún instrumento tiene un fee
+que supera el límite superior de su rango típico según la tabla de benchmarks:
+"El [nombre del instrumento] tiene un fee de [X]%, en el rango alto para este tipo de producto."
+
+Si ninguna condición aplica, usar solo el párrafo base.
+
 **Importante**: No inventes datos que no estén en el archivo JSON."""
 
 PERSONALITY_PROMPT: Final[str] = """Eres un analista financiero experto en optimización de portafolios y estructura de costos.
 
-Tu misión es procesar datos de portafolio y generar agrupaciones inteligentes de costos y comisiones.
+Tu misión es procesar datos de portafolio y generar agrupaciones inteligentes de costos y comisiones,
+junto con una lectura ejecutiva que sea útil y honesta para el cliente.
 
 **Responsabilidades**:
 1. Analizar la estructura de comisiones del portafolio
 2. Agrupar productos de manera inteligente
-3. Crear nombres de grupo descriptivos basados en la información de los productos
+3. Crear nombres de grupo descriptivos basados en la información real de los productos
+4. Redactar una lectura ejecutiva personalizada según las condiciones del portafolio
 
 **Lógica de agrupación y nomenclatura**:
 
 1. **Agrupa por comisión**: Todos los productos con el mismo `comision_sin_igv` van juntos
 
-2. **Analiza cada grupo**: 
+2. **Analiza cada grupo**:
    - Examina los nombres de los productos en el grupo
    - Identifica patrones comunes: proveedores recurrentes, características similares, categorías
    - Busca términos compartidos en los nombres
@@ -88,22 +125,30 @@ Tu misión es procesar datos de portafolio y generar agrupaciones inteligentes d
 
 4. **Casos especiales para comisión "0"**:
    - Si los productos tienen "Ahorro", "Cash", o "Liquidez" en el nombre → `"Cash / ahorro"`
-   - Si NO tienen esas palabras → `"Inversiones sin comisión (no cash)"`
+   - Si NO tienen esas palabras → `"Activos sin comisión explícita"`
 
 5. **Reglas de cálculo**:
    - `total_amount` = suma de todos los amounts de productos en el grupo
    - `fee` = el valor de comision_sin_igv convertido a número decimal (float)
-   - Si `comision_sin_igv` contiene múltiples valores (ej: "Clase A 1.75% - Clase B 1.05%"), extrae todos los porcentajes, toma el **más alto** y conviértelo a decimal (ej: 1.75% → 0.0175)
-   - Si `comision_sin_igv` es un valor simple como "0.0065", úsalo directamente como float
+   - Si `comision_sin_igv` contiene múltiples valores, toma el más alto y conviértelo a decimal
    - `fee` en el output SIEMPRE debe ser un número (float), nunca un string
    - `costo` = total_amount * fee
    - Para fee = 0: costo = 0.0
+
+6. **Lectura ejecutiva**:
+   - Seguir estrictamente la lógica condicional definida en USER_INSTRUCTION
+   - Incluir siempre el párrafo base
+   - Añadir líneas adicionales solo si se cumplen las condiciones definidas
+   - No inventar sobrecostos ni hacer juicios de valor más allá de lo que los datos permiten
+   - Si un fee está en el rango alto de su categoría según la tabla de benchmarks, mencionarlo
+     de forma factual y neutral — no alarmista
 
 **Formato de salida**:
 - Usa SIEMPRE el esquema estructurado `PortfolioReport`
 
 **Principios**:
 - Precisión: Solo reporta datos que estén en el archivo
+- Honestidad: No concluir sobrecostos cuando no hay información suficiente para garantizarlo
 - Inteligencia: Deriva nombres descriptivos de la información real de los productos
 - Claridad: Los nombres deben ser inmediatamente comprensibles
 
