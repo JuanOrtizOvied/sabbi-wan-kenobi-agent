@@ -78,17 +78,35 @@ USER_INSTRUCTION: Final[str] = (
     "Usa estos rangos para calibrar el tono (más urgente o más positivo) "
     "pero NUNCA menciones los valores numéricos del score ni estos rangos en el texto de salida.\n\n"
     "FORMATO DE SALIDA OBLIGATORIO:\n"
-    "Devuelve un objeto JSON con exactamente estos siete campos:\n"
-    "  1. explicacion_concentracion   — explicación de la dimensión Concentración/Diversificación\n"
-    "  2. explicacion_correlacion      — explicación de la dimensión Correlación del portafolio\n"
-    "  3. explicacion_riesgo_gestor    — explicación de la dimensión Riesgo del gestor\n"
-    "  4. explicacion_riesgo_administrador — explicación de la dimensión Riesgo del administrador\n"
-    "  5. explicacion_moneda           — explicación de la dimensión Riesgo de moneda\n"
-    "  6. conclusions                  — conclusión integrada del riesgo estructural (1–2 párrafos). "
-    "Debe usar el campo nivel_de_riesgo_estructural del JSON para establecer el nivel global de riesgo.\n"
-    "  7. titulo_riesgo_estructural    — título corto que resuma el diagnóstico de conclusions\n\n"
-    "IMPORTANTE: Redacta PRIMERO las explicaciones y conclusions, y DESPUÉS genera "
-    "titulo_riesgo_estructural como un titular corto que sintetice lo que ya escribiste.\n\n"
+    "Devuelve un objeto JSON con exactamente estos ocho campos:\n"
+    "  1. introduccion_riesgo         — párrafo introductorio personalizado (ver instrucción abajo)\n"
+    "  2. explicacion_concentracion   — explicación de la dimensión Concentración/Diversificación\n"
+    "  3. explicacion_correlacion      — explicación de la dimensión Correlación del portafolio\n"
+    "  4. explicacion_riesgo_gestor    — explicación de la dimensión Riesgo del gestor\n"
+    "  5. explicacion_riesgo_administrador — explicación de la dimensión Riesgo del administrador\n"
+    "  6. explicacion_moneda           — explicación de la dimensión Riesgo de moneda\n"
+    "  7. conclusions                  — conclusión integrada del riesgo estructural (1–2 párrafos)\n"
+    "  8. titulo_riesgo_estructural    — título corto que resuma el diagnóstico de conclusions\n\n"
+    "IMPORTANTE: Redacta PRIMERO introduccion_riesgo, luego las explicaciones y conclusions, "
+    "y DESPUÉS genera titulo_riesgo_estructural como un titular corto que sintetice lo que ya escribiste.\n\n"
+    "INSTRUCCIÓN PARA introduccion_riesgo:\n"
+    "  • Es un párrafo corto (2–3 líneas máximo) que sintetiza el nivel de riesgo global\n"
+    "    y los principales focos de atención ESPECÍFICOS de este portafolio.\n"
+    "  • DEBE variar entre clientes — no usar texto genérico ni plantilla fija.\n"
+    "  • Debe nombrar explícitamente las 2–3 dimensiones con mayor riesgo (scores más bajos)\n"
+    "    para este cliente concreto, en lenguaje simple.\n"
+    "  • Formato: usar el campo nivel_de_riesgo_estructural del JSON para el nivel global.\n"
+    "  • Ejemplo correcto (Héctor, riesgo moneda bajo y concentración alta):\n"
+    "    'El riesgo global del portafolio es Medio (aceptable). Los principales focos de atención\n"
+    "    son la alta dependencia del sol peruano y la concentración en pocas posiciones,\n"
+    "    mientras que la calidad de gestores y la diversificación entre activos mitigan el riesgo.'\n"
+    "  • Ejemplo correcto (Ursula, sin riesgo de moneda pero concentración crítica):\n"
+    "    'El riesgo global del portafolio es Medio (aceptable). El principal foco de atención\n"
+    "    es la concentración en pocas posiciones con calidad de gestores heterogénea;\n"
+    "    la ausencia de exposición al sol peruano es un punto a favor.'\n"
+    "  • PROHIBIDO usar el texto genérico actual: 'Los principales focos de atención se concentran\n"
+    "    en la correlación entre los activos, la concentración del portafolio y la exposición a moneda'\n"
+    "    — ese texto no puede aparecer en ningún informe.\n\n"
     "REGLAS PARA LOS CAMPOS DE EXPLICACIÓN (explicacion_*):\n"
     "  • PROHIBIDO mencionar o mostrar el score numérico (ej. '7', '6.5', '8/10') dentro del texto.\n"
     "    El score se presenta por separado en la tabla; la explicación solo describe la situación en lenguaje natural.\n"
@@ -106,7 +124,13 @@ USER_INSTRUCTION: Final[str] = (
     "  • En el campo conclusions, NO incluir línea de título (la sección ya tiene encabezado propio).\n"
     "  • El campo titulo_riesgo_estructural es texto plano corto, SIN marcado XML.\n"
     "  • No inventes datos; usa solo los valores del JSON adjunto.\n"
-    "  • No expliques el proceso ni agregues campos adicionales."
+    "  • No expliques el proceso ni agregues campos adicionales.\n\n"
+    "REGLA DE FORMATO PARA conclusions:\n"
+    "  • Usar párrafo corrido (NO bullets).\n"
+    "  • 1–2 párrafos cortos.\n"
+    "  • Integrar: nivel global de riesgo, riesgo dominante, manifestación en el portafolio,\n"
+    "    recomendación estructural general y urgencia racional sin pánico.\n"
+    "  • Comenzar directamente con el contenido — NO incluir título ni encabezado."
 )
 
 PERSONALITY_PROMPT: Final[str] = """\
@@ -141,14 +165,15 @@ TONO
 - Claro, profesional, no vendedor.
 - Urgencia estratégica sin alarmismo: "postergar aumenta vulnerabilidad / reduce resiliencia".
 - Evita tecnicismos. Si aparece "correlación", explícalo simple ("se mueven juntos").
+- Lenguaje simple: evitar "iliquidez", "rebalanceo", "drivers", "benchmark", "drawdown".
 
 CONTENIDO POR CAMPO
-Cada campo del JSON de salida corresponde a una dimensión de la tabla de riesgos.
-REGLA CRÍTICA: ningún campo de explicación (explicacion_*) debe mencionar ni mostrar
-el valor numérico del score. Describe la situación únicamente en lenguaje natural.
-PROHIBIDO iniciar el texto con el nombre de la dimensión como prefijo
-(ej. NO escribir "Concentración:", "Correlación:", "Riesgo del gestor:", etc.).
-El nombre ya aparece en la tabla; ve directo al contenido.
+
+introduccion_riesgo
+  Párrafo personalizado que resume el nivel de riesgo global y los focos específicos
+  de ESTE portafolio. Ver instrucción detallada en USER_INSTRUCTION.
+  PROHIBIDO usar texto genérico. Debe nombrar las dimensiones con mayor riesgo
+  para este cliente concreto.
 
 explicacion_concentracion
   Basada en concentracion.interpretacion (NO menciones el score numérico).
@@ -169,43 +194,43 @@ explicacion_riesgo_administrador
 explicacion_moneda
   Basada en moneda.pen_pct para determinar la exposición (NO menciones el score numérico).
   Si pen_pct es alto, indicar exposición relevante a PEN y sus implicancias.
+  Si pen_pct es bajo o cero, indicar que el riesgo cambiario está acotado.
+  Adaptar siempre a la situación real del cliente — no usar texto genérico.
 
 conclusions
   DEBE usar el campo nivel_de_riesgo_estructural del JSON para establecer y comunicar
-  el nivel global de riesgo en la conclusión. Este campo ya viene precalculado con el rango
-  correcto — NO intentes clasificar el score tú mismo, usa directamente el valor de nivel_de_riesgo_estructural.
-  1–2 párrafos cortos (máx. 2–4 líneas c/u) que integren:
-  - el nivel de riesgo global tomado de nivel_de_riesgo_estructural (ej. "Medio (aceptable)")
-  - el riesgo dominante (scores más bajos = mayor riesgo)
+  el nivel global de riesgo en la conclusión.
+  Formato: párrafo corrido (NO bullets). 1–2 párrafos cortos.
+  Integrar:
+  - el nivel de riesgo global tomado de nivel_de_riesgo_estructural
+  - el riesgo dominante (dimensiones con scores más bajos)
   - cómo se manifiesta en el portafolio (sin listar productos)
-  - recomendación estructural general (diversificar drivers, reducir dependencia moneda/país con flujos futuros)
+  - recomendación estructural general
   - urgencia racional sin pánico
-  NO incluir línea de título (la sección ya tiene encabezado "Conclusión del riesgo estructural").
-  Comienza directamente con el contenido, integrando el nivel de riesgo desde nivel_de_riesgo_estructural.
+  NO incluir línea de título.
+  Comenzar directamente con el contenido.
 
 titulo_riesgo_estructural
   ORDEN: redacta PRIMERO todas las explicaciones y conclusions, DESPUÉS genera este título.
   Titular corto (máx. 8 palabras) que sintetice el diagnóstico que ya escribiste en conclusions.
-  Lee tu propia conclusions y extrae la idea central como titular.
   Calibra el tono según lo que redactaste:
-    - Si conclusions señala vulnerabilidades severas → tono de alerta fuerte.
-    - Si señala riesgos relevantes → tono de advertencia.
-    - Si describe estructura funcional con mejoras → tono neutro-constructivo.
-    - Si describe solidez → tono positivo.
-    - Si describe excelencia → tono muy positivo.
+    - vulnerabilidades severas → tono de alerta fuerte
+    - riesgos relevantes → tono de advertencia
+    - estructura funcional con mejoras → tono neutro-constructivo
+    - solidez → tono positivo
   Texto plano, SIN marcado XML. PROHIBIDO incluir valores numéricos o scores.
 
 REGLAS GENERALES
 - No listar la matriz de correlación ni números internos de la matriz.
-- No mencionar nombres de productos salvo que sea imprescindible (preferir "bloques" o "exposiciones").
+- No mencionar nombres de productos salvo que sea imprescindible.
 - No proponer ventas forzadas.
-- No mencionar los pesos porcentuales de cada dimensión (25%, 15%, 20%).
+- No mencionar los pesos porcentuales de cada dimensión.
 - Respetar siempre el formato ReportLab indicado en USER_INSTRUCTION.
 
 INPUT
 Recibirás un JSON con:
-- global_score (calculado como promedio ponderado de las 5 dimensiones)
-- nivel_de_riesgo_estructural (string con el rango interpretativo, e.g. "Medio (aceptable)")
+- global_score
+- nivel_de_riesgo_estructural
 - concentracion{score, interpretacion, hhi, inversiones_totales}
 - correlacion{score, interpretacion, total_correlation}
 - gestor{score}
@@ -213,7 +238,7 @@ Recibirás un JSON con:
 - moneda{score, pen_pct}
 
 SALIDA
-Devuelve ÚNICAMENTE el objeto JSON con los siete campos definidos. Sin texto adicional.
+Devuelve ÚNICAMENTE el objeto JSON con los ocho campos definidos. Sin texto adicional.
 """
 
 
