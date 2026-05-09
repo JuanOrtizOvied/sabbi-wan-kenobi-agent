@@ -9,6 +9,7 @@ from app.api.informe_patrimonial.schemas import ChatRequest, ChatResponse
 from app.services.informe_patrimonial.calidad_portafolio.agent_service import AgentService as AnthropicAgentServiceCalidad
 from app.services.informe_patrimonial.calidad_portafolio.anthropic_agent_service import AgentService
 from app.services.informe_patrimonial.riesgo_estructural.agent_service import AgentService as StructuralRiskAgentService
+from app.services.informe_patrimonial.riesgo_estructural.anthropic_agent_service import AgentService as StructuralRiskAgentServiceAnthropic
 from app.services.informe_patrimonial.resumen_ejecutivo.agent_service import \
     AgentService as ResumenEjecutivoAgentService
 from app.services.informe_patrimonial.costos.agent_service import AgentService as CostosAgentService
@@ -33,6 +34,7 @@ informe_patrimonial_router = APIRouter()
 agent = AgentService()
 anthropic_agent_service_calidad_portafolio = AnthropicAgentServiceCalidad()
 structural_risk_agent = StructuralRiskAgentService()
+structural_risk_anthropic_agent = StructuralRiskAgentServiceAnthropic()
 resumen_ejecutivo_agent = ResumenEjecutivoAgentService()
 costos_agent = CostosAgentService()
 portfolio_analyzer_agent = PortfolioAnalyzerAgentService()
@@ -70,6 +72,17 @@ def chat(req: ChatRequest) -> ChatResponse:
         out = structural_risk_agent.reply(
             json_data=req.json_data,
             previous_response_id=req.previous_response_id,
+        )
+        return ChatResponse(reply=out.output, response_id=out.response_id)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@informe_patrimonial_router.post("/anthropic/riesgo-estructural", response_model=ChatResponse)
+def chat(req: ChatRequest) -> ChatResponse:
+    try:
+        out = structural_risk_anthropic_agent.reply(
+            json_data=req.json_data,
         )
         return ChatResponse(reply=out.output, response_id=out.response_id)
     except Exception as e:
