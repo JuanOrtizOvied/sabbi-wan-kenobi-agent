@@ -13,7 +13,7 @@ from app.core.config import settings
 log = logging.getLogger(__name__)
 
 DEFAULT_MODEL: Final[str] = "claude-opus-4-6"
-MAX_TOKENS: Final[int] = 16_384
+MAX_TOKENS: Final[int] = 32_768
 
 USER_INSTRUCTION: Final[str] = """\
 Analiza el archivo adjunto que contiene los datos completos del portafolio de inversión de un cliente.
