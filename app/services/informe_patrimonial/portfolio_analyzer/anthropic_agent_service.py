@@ -621,7 +621,7 @@ class PortfolioAnalyzerService:
             model=self._model,
             max_tokens=self._max_tokens,
             system=ANALYST_PROMPT,
-            thinking={"type": "adaptive"},
+            thinking={"type": "enabled", "budget_tokens": 10_000},
             messages=[
                 {"role": "user", "content": user_content},
             ],
