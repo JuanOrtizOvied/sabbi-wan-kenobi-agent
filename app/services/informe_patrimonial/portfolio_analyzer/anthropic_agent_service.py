@@ -538,12 +538,12 @@ class PortfolioAnalyzerService:
     Service that uses the Anthropic Messages API to:
       - send portfolio JSON data as inline content
       - leverage extended thinking for the internal exploration phase
-      - return a schema-guaranteed structured diagnostic via messages.parse()
+      - return a schema-validated structured diagnostic
 
-    Uses Pydantic-based structured output (constrained decoding) so the
-    response is guaranteed to match the DiagnosticoEjecutivo schema.
-    This eliminates manual JSON parsing, markdown fence stripping, and
-    the risk of malformed output.
+    Uses streaming (messages.stream) to handle long-running requests
+    that exceed the 10-minute HTTP timeout. The output_format parameter
+    enables constrained decoding, and the response is validated against
+    the DiagnosticoEjecutivo Pydantic schema after streaming completes.
     """
 
     def __init__(
@@ -602,9 +602,10 @@ class PortfolioAnalyzerService:
         Uses extended thinking (adaptive) so the model can perform its
         internal exploration phase (FASE 1) before producing the output.
 
-        Structured output via messages.parse() guarantees the response
-        matches the DiagnosticoEjecutivo Pydantic schema — no manual
-        JSON parsing or cleanup needed.
+        Uses messages.stream() to avoid the 10-minute HTTP timeout on
+        long-running requests. The output_format parameter still enables
+        constrained decoding, and the JSON is validated against the
+        DiagnosticoEjecutivo Pydantic schema after streaming completes.
 
         Returns a PortfolioAnalystReply with:
           - diagnostico: parsed DiagnosticoEjecutivo (Pydantic model)
@@ -616,7 +617,7 @@ class PortfolioAnalyzerService:
 
         user_content = self._build_user_content(json_data)
 
-        response = self._client.messages.parse(
+        with self._client.messages.stream(
             model=self._model,
             max_tokens=self._max_tokens,
             system=ANALYST_PROMPT,
@@ -625,13 +626,20 @@ class PortfolioAnalyzerService:
                 {"role": "user", "content": user_content},
             ],
             output_format=DiagnosticoEjecutivo,
-        )
+        ) as stream:
+            response = stream.get_final_message()
 
-        diagnostico = response.parsed_output
-        if not isinstance(diagnostico, DiagnosticoEjecutivo):
+        # Extract JSON text from the response content blocks
+        json_text = next(
+            (block.text for block in response.content if block.type == "text"),
+            None,
+        )
+        if not json_text:
             raise RuntimeError(
-                "Anthropic structured output returned an unexpected type"
+                "Anthropic response contained no text content block"
             )
+
+        diagnostico = DiagnosticoEjecutivo.model_validate_json(json_text)
 
         return PortfolioAnalystReply(
             diagnostico=diagnostico,
