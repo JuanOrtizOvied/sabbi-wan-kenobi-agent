@@ -1,3 +1,20 @@
+from __future__ import annotations
+
+import json
+import logging
+from dataclasses import dataclass
+from typing import Any, Final, Mapping, Optional
+
+import anthropic
+from pydantic import BaseModel
+
+from app.core.config import settings
+
+log = logging.getLogger(__name__)
+
+DEFAULT_MODEL: Final[str] = "claude-opus-4-6"
+MAX_TOKENS: Final[int] = 16_384
+
 PERSONALITY_PROMPT: Final[str] = """\
 Actúa como consultor senior en asesoría patrimonial de Sabbi.
 
@@ -329,3 +346,155 @@ Antes de devolver el output, verifica:
 ✓ ¿El tono es de asesor que abre una conversación,
   no de sistema que emite un diagnóstico? Si no → reescribir
 """
+
+
+# ── Pydantic output models ───────────────────────────────────────────
+
+
+class Observacion(BaseModel):
+    """A single profiling observation detected from Typeform responses."""
+    grupo: str
+    regla: str
+    titulo_observacion: str
+    descripcion_observacion: str
+
+
+class ObservacionesOutput(BaseModel):
+    """
+    Top-level structured output returned by the profiling agent.
+
+    Maps 1-to-1 with the JSON schema defined in USER_INSTRUCTION.
+    Uses Pydantic so it can be passed directly to messages.parse()
+    for guaranteed schema compliance via constrained decoding.
+    """
+    observaciones_count: int
+    observaciones: list[Observacion]
+
+
+# ── Reply wrapper ─────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class ProfilingAgentReply:
+    observaciones: ObservacionesOutput
+    raw: dict[str, Any]
+    message_id: str
+
+
+class ConfigError(RuntimeError):
+    """Raised when required configuration is missing."""
+
+
+class ProfilingAnalyzerService:
+    """
+    Service that uses the Anthropic Messages API to:
+      - receive Typeform profiling responses as inline JSON
+      - leverage extended thinking for the internal rule-evaluation phase
+      - return a schema-validated set of personalized observations
+
+    Uses streaming (messages.stream) to handle long-running requests
+    that exceed the 10-minute HTTP timeout. The output_format parameter
+    enables constrained decoding, and the response is validated against
+    the ObservacionesOutput Pydantic schema after streaming completes.
+    """
+
+    def __init__(
+            self,
+            client: Optional[anthropic.Anthropic] = None,
+            *,
+            model: str = DEFAULT_MODEL,
+            max_tokens: int = MAX_TOKENS,
+    ) -> None:
+        self._client = client or self._build_client()
+        self._model = model
+        self._max_tokens = max_tokens
+
+    # ── Construction helpers ──────────────────────────────────────
+
+    @staticmethod
+    def _build_client() -> anthropic.Anthropic:
+        api_key = settings.ANTHROPIC_API_KEY
+        if not api_key:
+            raise ConfigError("ANTHROPIC_API_KEY is missing")
+        return anthropic.Anthropic(api_key=api_key)
+
+    # ── Message building ─────────────────────────────────────────
+
+    @staticmethod
+    def _serialize_typeform(json_data: Mapping[str, Any]) -> str:
+        """Serialize Typeform response data to a JSON string for inline embedding."""
+        return json.dumps(json_data, ensure_ascii=False, indent=2)
+
+    @classmethod
+    def _build_user_content(cls, json_data: Mapping[str, Any]) -> str:
+        """
+        Build the full user message content.
+
+        The Typeform JSON is embedded inline in the user message,
+        separated by clear delimiters for the model to parse.
+        """
+        typeform_json = cls._serialize_typeform(json_data)
+        return (
+            f"{USER_INSTRUCTION}\n\n"
+            f"--- INICIO RESPUESTAS TYPEFORM ---\n"
+            f"{typeform_json}\n"
+            f"--- FIN RESPUESTAS TYPEFORM ---"
+        )
+
+    # ── Main entry point ─────────────────────────────────────────
+
+    def analyze(
+            self,
+            json_data: Mapping[str, Any],
+    ) -> ProfilingAgentReply:
+        """
+        Run the Typeform profiling analysis via Anthropic's Messages API
+        and return the structured observations.
+
+        Uses extended thinking (adaptive) so the model can perform its
+        internal rule-evaluation phase (PASO 1) before producing the output.
+
+        Uses messages.stream() to avoid the 10-minute HTTP timeout on
+        long-running requests. The output_format parameter still enables
+        constrained decoding, and the JSON is validated against the
+        ObservacionesOutput Pydantic schema after streaming completes.
+
+        Returns a ProfilingAgentReply with:
+          - observaciones: parsed ObservacionesOutput (Pydantic model)
+          - raw: dict serialisation of the observations for logging/storage
+          - message_id: Anthropic message ID for tracing
+        """
+        if not isinstance(json_data, Mapping):
+            raise TypeError("json_data must be a mapping (dict-like)")
+
+        user_content = self._build_user_content(json_data)
+
+        with self._client.messages.stream(
+            model=self._model,
+            max_tokens=self._max_tokens,
+            system=PERSONALITY_PROMPT,
+            thinking={"type": "enabled", "budget_tokens": 8_000},
+            messages=[
+                {"role": "user", "content": user_content},
+            ],
+            output_format=ObservacionesOutput,
+        ) as stream:
+            response = stream.get_final_message()
+
+        # Extract JSON text from the response content blocks
+        json_text = next(
+            (block.text for block in response.content if block.type == "text"),
+            None,
+        )
+        if not json_text:
+            raise RuntimeError(
+                "Anthropic response contained no text content block"
+            )
+
+        observaciones = ObservacionesOutput.model_validate_json(json_text)
+
+        return ProfilingAgentReply(
+            observaciones=observaciones,
+            raw=observaciones.model_dump(),
+            message_id=response.id,
+        )
