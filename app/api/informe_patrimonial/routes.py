@@ -19,6 +19,7 @@ from app.services.informe_patrimonial.portfolio_analyzer.agent_service import \
 from app.services.informe_patrimonial.portfolio_analyzer.anthropic_agent_service import (
     PortfolioAnalyzerService as PortfolioAnalyzerAnthropicAgentService)
 from app.services.informe_patrimonial.resumen_ejecutivo.anthropic_agent_service import AgentService as ResumenEjecutivoAnthropicAgent
+from app.services.informe_patrimonial.radiografia_patrimonial.anthropic_agent_service import AgentService as RadiografiaPatrimonialAnthropicAgent
 
 from openpyxl import Workbook
 
@@ -42,6 +43,7 @@ costos_anthropic_agent = CostosAnthropicAgentService()
 portfolio_analyzer_agent = PortfolioAnalyzerAgentService()
 portfolio_analyzer_anthropic_agent = PortfolioAnalyzerAnthropicAgentService()
 resumen_ejecutivo_anthropic_agent = ResumenEjecutivoAnthropicAgent()
+radiografia_patrimonial_anthropic_agent = RadiografiaPatrimonialAnthropicAgent()
 
 
 @informe_patrimonial_router.post("/calidad-portafolio", response_model=ChatResponse)
@@ -143,6 +145,22 @@ async def portfolio_analyzer(req: ChatRequest):
             reply=reply.diagnostico.model_dump(),
             message_id=reply.message_id,
         )
+
+    except (TypeError, ValueError) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@informe_patrimonial_router.post(
+    "/anthropic/radigrafia-patrimonial",
+    response_model=PortfolioAnalyzerResponse,
+)
+async def radiografia_patrimonial(req: ChatRequest) -> ChatResponse:
+    try:
+        reply = radiografia_patrimonial_anthropic_agent.analyze(json_data=req.json_data)
+
+        return ChatResponse(reply=reply.observaciones.model_dump(), response_id=reply.message_id)
 
     except (TypeError, ValueError) as e:
         raise HTTPException(status_code=400, detail=str(e))

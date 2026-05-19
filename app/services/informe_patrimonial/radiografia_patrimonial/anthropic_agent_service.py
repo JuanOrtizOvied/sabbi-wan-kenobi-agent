@@ -385,7 +385,7 @@ class ConfigError(RuntimeError):
     """Raised when required configuration is missing."""
 
 
-class ProfilingAnalyzerService:
+class AgentService:
     """
     Service that uses the Anthropic Messages API to:
       - receive Typeform profiling responses as inline JSON
