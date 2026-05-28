@@ -63,7 +63,6 @@ def chat(req: ChatRequest) -> ChatResponse:
     try:
         out = anthropic_agent_service_calidad_portafolio.reply(
             json_data=req.json_data,
-            previous_response_id=req.previous_response_id,
         )
         return ChatResponse(reply=out.parsed, response_id=out.response_id)
     except Exception as e:
