@@ -579,3 +579,4 @@ class AgentService:
             raise RuntimeError("API returned an unexpected result shape")
 
         return AgentReply(response_id=response.id, parsed=parsed.model_dump())
+    
