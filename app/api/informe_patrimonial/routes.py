@@ -151,10 +151,7 @@ async def portfolio_analyzer(req: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@informe_patrimonial_router.post(
-    "/anthropic/radiografia-patrimonial",
-    response_model=PortfolioAnalyzerResponse,
-)
+@informe_patrimonial_router.post("/anthropic/radiografia-patrimonial")
 async def radiografia_patrimonial(req: ChatRequest) -> ChatResponse:
     try:
         reply = radiografia_patrimonial_anthropic_agent.analyze(json_data=req.json_data)
