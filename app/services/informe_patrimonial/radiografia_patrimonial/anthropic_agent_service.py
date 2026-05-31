@@ -473,7 +473,8 @@ class AgentService:
             model=self._model,
             max_tokens=self._max_tokens,
             system=PERSONALITY_PROMPT,
-            thinking={"type": "adaptive", "effort": "high"},
+            thinking={"type": "adaptive"},
+            output_config={"effort": "medium"},
             messages=[
                 {"role": "user", "content": user_content},
             ],
