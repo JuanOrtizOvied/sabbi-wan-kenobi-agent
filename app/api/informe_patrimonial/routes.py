@@ -152,7 +152,7 @@ async def portfolio_analyzer(req: ChatRequest):
 
 
 @informe_patrimonial_router.post(
-    "/anthropic/radigrafia-patrimonial",
+    "/anthropic/radiografia-patrimonial",
     response_model=PortfolioAnalyzerResponse,
 )
 async def radiografia_patrimonial(req: ChatRequest) -> ChatResponse:
