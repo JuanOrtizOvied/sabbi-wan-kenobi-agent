@@ -29,6 +29,7 @@ Con base en toda esta información, produce el diagnóstico ejecutivo estructura
 siguiendo estrictamente el formato JSON definido en tus instrucciones.
 
 Recuerda:
+- Genera un diagnóstico general del portafolio con titulo y subtitulo (cada uno máximo 200 caracteres).
 - Ejecuta la FASE DE EXPLORACIÓN internamente antes de seleccionar las ineficiencias.
 - Identifica la tesis central antes de construir el resto del análisis.
 - Selecciona exactamente 3 fortalezas reales y relevantes.
@@ -405,6 +406,10 @@ No uses Markdown, comentarios ni comillas triples.
 La estructura del JSON debe ser EXACTAMENTE esta:
 
 {
+ "diagnostico_general": {
+   "titulo": "string (máximo 200 caracteres)",
+   "subtitulo": "string (máximo 200 caracteres)"
+ },
  "contexto_resumen": {
    "objetivo_principal": "string",
    "flujo_mensual_requerido_usd": 0
@@ -452,10 +457,44 @@ La estructura del JSON debe ser EXACTAMENTE esta:
 }
 
 
+DIAGNÓSTICO GENERAL DEL PORTAFOLIO
+
+Antes del detalle, genera un bloque diagnostico_general que funcione como titular
+y bajada del diagnóstico. Es lo primero que verá el cliente.
+
+- titulo: frase principal que sintetiza el estado general del portafolio en lenguaje
+  simple y directo. Debe comunicar la conclusión más importante de una sola mirada.
+  Máximo 200 caracteres.
+- subtitulo: complemento que aporta el matiz o eje de mejora más relevante.
+  Máximo 200 caracteres.
+
+RESTRICCIÓN DE LONGITUD: tanto el titulo como el subtitulo deben tener
+un máximo de 200 caracteres cada uno. Si alguno se excede, reformula con mayor concisión.
+
+El tono debe ser profesional, claro, libre de tecnicismos y sin alarmismo.
+No debe repetir textualmente la tesis_central ni el mensaje_final.
+
+Ejemplos de diagnostico_general bien construidos:
+
+  titulo: "Un portafolio sólido con oportunidades claras de diversificación"
+  subtitulo: "Reducir la concentración local es el principal eje de mejora"
+
+  titulo: "Buena base patrimonial, pero demasiado concentrada en un solo país"
+  subtitulo: "Internacionalizar gradualmente protegerá mejor tu patrimonio"
+
+  titulo: "Estructura ordenada con margen para mejorar la generación de ingresos"
+  subtitulo: "Ajustar la composición puede acercarte al flujo mensual que necesitas"
+  
+  titulo: "Tu portafolio no necesita cirugía. Necesita dirección"
+  subtitulo: "Sí Perú va bien, te irá bien. Pero hoy depende de que Perú vaya bien"
+
+
 REGLAS ADICIONALES DE OUTPUT
 
 - contexto_resumen debe extraerse de contexto_cliente del input.
   Si flujo_mensual_requerido_usd es null o no aplica, usar 0.
+- diagnostico_general debe ser coherente con la tesis_central pero no repetirla.
+  Verificar que titulo ≤ 200 caracteres y subtitulo ≤ 200 caracteres antes de emitir el JSON.
 - tesis_central debe ser una síntesis ejecutiva de 1-3 frases.
 - mensaje_final no debe repetir textualmente la tesis central.
 - El JSON debe ser consistente internamente.
@@ -465,6 +504,12 @@ REGLAS ADICIONALES DE OUTPUT
 
 
 # ── Pydantic output models ───────────────────────────────────────────
+
+
+class DiagnosticoGeneral(BaseModel):
+    """High-level portfolio diagnostic headline (titulo ≤ 200 chars, subtitulo ≤ 200 chars)."""
+    titulo: str
+    subtitulo: str
 
 
 class ContextoResumen(BaseModel):
@@ -510,6 +555,7 @@ class DiagnosticoEjecutivo(BaseModel):
     Uses Pydantic so it can be passed directly to messages.parse()
     for guaranteed schema compliance via constrained decoding.
     """
+    diagnostico_general: DiagnosticoGeneral
     contexto_resumen: ContextoResumen
     tesis_central: str
     fortalezas: list[Fortaleza]
