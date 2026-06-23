@@ -26,6 +26,10 @@ class PortfolioAnalyzerRequest(BaseModel):
 
 
 # ── Response sub-models ──────────────────────────────────────────────
+class DiagnosticoGeneral(BaseModel):
+    """High-level portfolio diagnostic headline (titulo ≤ 200 chars, subtitulo ≤ 200 chars)."""
+    titulo: str
+    subtitulo: str
 
 
 class ContextoResumenOut(BaseModel):
@@ -59,6 +63,7 @@ class AccionPriorizadaOut(BaseModel):
 
 
 class DiagnosticoEjecutivoOut(BaseModel):
+    diagnostico_general: DiagnosticoGeneral
     contexto_resumen: ContextoResumenOut
     tesis_central: str
     fortalezas: list[FortalezaOut]
