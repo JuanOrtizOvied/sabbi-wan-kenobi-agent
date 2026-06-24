@@ -15,7 +15,7 @@ class PortafolioItem(BaseModel):
     pertenencia: str
     moneda_invertida: Optional[str] = None
     valor_estimado_usd: float
-    rendimiento_anual_porcentaje: Optional[str] = None
+    rendimiento_anual_porcentaje: Optional[float | str] = None
     name: str
     slugs: List[str] = Field(default_factory=list)
     comision_sin_igv: str
