@@ -316,11 +316,30 @@ class AgentService:
             output_format=PortfolioReport,
         )
 
+        if response.stop_reason in {
+            "max_tokens",
+            "model_context_window_exceeded",
+        }:
+            raise RuntimeError(
+                "Claude no completó la respuesta. "
+                f"stop_reason={response.stop_reason}; "
+                f"input_tokens={response.usage.input_tokens}; "
+                f"output_tokens={response.usage.output_tokens}; "
+                f"max_tokens_configurado={self._max_tokens}; "
+                f"message_id={response.id}"
+            )
+
         parsed = response.parsed_output
+
         if not isinstance(parsed, PortfolioReport):
             raise RuntimeError(
-                f"API returned unexpected output type: {type(parsed)}. "
-                f"Expected PortfolioReport."
+                "Claude no generó un PortfolioReport válido. "
+                f"stop_reason={response.stop_reason}; "
+                f"input_tokens={response.usage.input_tokens}; "
+                f"output_tokens={response.usage.output_tokens}; "
+                f"max_tokens_configurado={self._max_tokens}; "
+                f"parsed_type={type(parsed).__name__}; "
+                f"message_id={response.id}"
             )
 
         log.info(
