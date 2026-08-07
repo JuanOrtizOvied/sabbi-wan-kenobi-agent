@@ -13,7 +13,7 @@ from app.core.config import settings
 log = logging.getLogger(__name__)
 
 DEFAULT_MODEL: Final[str] = "claude-sonnet-4-6"
-MAX_TOKENS: Final[int] = 21_200
+MAX_TOKENS: Final[int] = 64_000
 
 USER_INSTRUCTION: Final[str] = """Analiza el archivo JSON del portafolio adjunto y genera un reporte estructurado de costos y comisiones.
 
@@ -305,16 +305,17 @@ class AgentService:
 
         user_content = self._build_user_content(json_data)
 
-        response = self._client.messages.parse(
-            model=self._model,
-            max_tokens=self._max_tokens,
-            system=PERSONALITY_PROMPT,
-            thinking={"type": "adaptive"},
-            messages=[
-                {"role": "user", "content": user_content},
-            ],
-            output_format=PortfolioReport,
-        )
+        with self._client.messages.stream(
+                model=self._model,
+                max_tokens=self._max_tokens,
+                system=PERSONALITY_PROMPT,
+                thinking={"type": "adaptive"},
+                messages=[
+                    {"role": "user", "content": user_content},
+                ],
+                output_format=PortfolioReport,
+        ) as stream:
+            response = stream.get_final_message()
 
         if response.stop_reason in {
             "max_tokens",
