@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from typing import Any, Final, Mapping, Optional
 
 import anthropic
-from pydantic import BaseModel
+from anthropic import transform_schema
+from pydantic import BaseModel, TypeAdapter
 
 from app.core.config import settings
 
@@ -219,6 +220,54 @@ E3 — Deuda significativa mientras busca invertir
            de la deuda que mantiene? Si no, cada sol invertido
            puede estar trabajando menos de lo que parece.
 
+──────────────────────────────────────
+GRUPO F — PERFIL BASE (ETAPA INICIAL)
+
+Estas reglas SOLO se evalúan cuando ninguna regla de los Grupos A–E
+se activa con claridad. Sirven de base para clientes en etapa inicial,
+donde el valor no está en señalar una contradicción sino en ordenar
+los primeros pasos. Se redactan con los datos concretos del cliente
+igual que las demás — nunca genéricas.
+
+F1 — Primer inversionista con horizonte largo
+  Condición: nunca ha invertido / experiencia = "Recién estás empezando"
+              AND horizonte = "Largo Plazo" o > 8 años
+  Insight: en esta etapa el activo más grande es el tiempo, no el producto.
+           Empezar ordenado y sostener el aporte pesa más que acertar
+           la inversión "perfecta". ¿Cómo se ve un primer año bien armado?
+
+F2 — Riesgo declarado alto sin experiencia previa
+  Condición: disposición al riesgo autodeclarada = "Media", "Alta" o superior
+              AND nunca ha invertido / recién empieza
+              AND caída máxima tolerada declarada <= 25%
+  Insight: se define como alguien de riesgo alto, pero es su primera vez
+           invirtiendo y el límite de caída que declara es acotado.
+           La tolerancia real recién se conoce en la primera caída.
+           ¿Qué significa "alto" para ti en la práctica?
+
+F3 — Dependientes económicos sin ingreso alterno
+  Condición: tiene >= 1 dependiente económico
+              AND no tiene otra fuente de ingresos recurrente
+  Insight: hay personas que dependen de ti y las inversiones no son hoy
+           tu red de respaldo. Antes de cuánto rendir, la pregunta es
+           cuánto colchón disponible existe si algo cambia.
+           ¿Ese piso ya está cubierto?
+
+F4 — El aporte mensual manda en esta etapa
+  Condición: patrimonio disponible para invertir < USD 200k
+              AND capacidad de ahorro mensual declarada > 0
+  Insight: con el capital actual, lo que más mueve el resultado no es
+           el retorno sino la constancia del aporte. Un monto pequeño
+           sostenido supera a uno grande esporádico.
+           ¿Cuánto es realista sostener cada mes?
+
+F5 — Quiere que lo guíen y a la vez aprender
+  Condición: prefiere que un experto le recomiende qué hacer
+              AND valora aprender o contrastar ideas con otros inversionistas
+  Insight: buscas orientación clara, pero también quieres entender y
+           contrastar. El acompañamiento que te sirve combina las dos:
+           decidir con apoyo, sin quedar fuera de la conversación.
+
 ════════════════════════════════════════
 PASO 2 — SELECCIONAR Y PRIORIZAR
 ════════════════════════════════════════
@@ -230,15 +279,24 @@ siguiendo este orden de prioridad:
   2. Segundo: reglas de contradicción objetivo/situación (Grupo B)
   3. Tercero: reglas de brecha patrimonio/experiencia (Grupo A)
   4. Cuarto: reglas de concentración/visibilidad (Grupo C)
-  5. Último: reglas de riesgo/comportamiento (Grupo E)
+  5. Quinto: reglas de riesgo/comportamiento (Grupo E)
+  6. Solo si A–E no activan nada: reglas de perfil base (Grupo F)
 
 Reglas adicionales de selección:
 - Selecciona siempre las 2 con mayor tensión genuina para este cliente
-- No incluyas dos observaciones del mismo grupo
+- No incluyas dos observaciones del mismo grupo, EXCEPTO cuando ambas
+  provengan del Grupo F (fallback), donde sí se permiten 2 reglas F
 - Si solo se activa 1 regla claramente, redacta 2 observaciones:
   la regla activada + la más relevante del Grupo E o C
-- Si ninguna regla se activa con claridad, devuelve
-  observaciones_count = 0 y observaciones = [] sin inventar insights
+- Si ninguna regla de los Grupos A–E se activa con claridad, NO devuelvas 0.
+  En su lugar evalúa el GRUPO F (Perfil Base) y selecciona las 2 reglas
+  de ese grupo con mayor relevancia y datos concretos para este cliente.
+  Nunca inventes datos: si una observación de F quedaría genérica,
+  reemplázala por otra de F que sí ancle en un dato real del Typeform.
+- Devuelve observaciones_count = 0 y observaciones = [] únicamente en el
+  caso improbable de que ni siquiera el Grupo F pueda anclarse en un dato
+  real del cliente. En la práctica, con los datos del Typeform siempre
+  habrá al menos 2 observaciones del Grupo F disponibles.
 
 ════════════════════════════════════════
 FORMATO DE SALIDA
@@ -371,6 +429,14 @@ class ObservacionesOutput(BaseModel):
     observaciones: list[Observacion]
 
 
+# JSON schema derived from the Pydantic model and transformed by the SDK
+# (removes unsupported constraints, adds additionalProperties: false, etc.)
+# so it can be passed directly to output_config.format for constrained decoding.
+OBSERVACIONES_JSON_SCHEMA: Final[dict[str, Any]] = transform_schema(
+    TypeAdapter(ObservacionesOutput).json_schema()
+)
+
+
 # ── Reply wrapper ─────────────────────────────────────────────────────
 
 
@@ -455,7 +521,7 @@ class AgentService:
         internal rule-evaluation phase (PASO 1) before producing the output.
 
         Uses messages.stream() to avoid the 10-minute HTTP timeout on
-        long-running requests. The output_format parameter still enables
+        long-running requests. The output_config.format parameter enables
         constrained decoding, and the JSON is validated against the
         ObservacionesOutput Pydantic schema after streaming completes.
 
@@ -474,11 +540,19 @@ class AgentService:
             max_tokens=self._max_tokens,
             system=PERSONALITY_PROMPT,
             thinking={"type": "adaptive"},
-            output_config={"effort": "medium"},
+            # Structured outputs: `format` and `effort` go together inside
+            # `output_config`. This enables constrained decoding so the model
+            # is forced to emit JSON matching ObservacionesOutput.
+            output_config={
+                "format": {
+                    "type": "json_schema",
+                    "schema": OBSERVACIONES_JSON_SCHEMA,
+                },
+                "effort": "medium",
+            },
             messages=[
                 {"role": "user", "content": user_content},
             ],
-            output_format=ObservacionesOutput,
         ) as stream:
             response = stream.get_final_message()
 
