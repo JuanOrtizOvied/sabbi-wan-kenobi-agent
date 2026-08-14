@@ -13,7 +13,7 @@ from app.core.config import settings
 log = logging.getLogger(__name__)
 
 DEFAULT_MODEL: Final[str] = "claude-sonnet-4-6"
-MAX_TOKENS: Final[int] = 16_384
+MAX_TOKENS: Final[int] = 64_000
 
 USER_INSTRUCTION: Final[str] = """Analiza el archivo JSON del portafolio adjunto y genera un reporte estructurado de costos y comisiones.
 
@@ -305,22 +305,42 @@ class AgentService:
 
         user_content = self._build_user_content(json_data)
 
-        response = self._client.messages.parse(
-            model=self._model,
-            max_tokens=self._max_tokens,
-            system=PERSONALITY_PROMPT,
-            thinking={"type": "adaptive"},
-            messages=[
-                {"role": "user", "content": user_content},
-            ],
-            output_format=PortfolioReport,
-        )
+        with self._client.messages.stream(
+                model=self._model,
+                max_tokens=self._max_tokens,
+                system=PERSONALITY_PROMPT,
+                thinking={"type": "adaptive"},
+                messages=[
+                    {"role": "user", "content": user_content},
+                ],
+                output_format=PortfolioReport,
+        ) as stream:
+            response = stream.get_final_message()
+
+        if response.stop_reason in {
+            "max_tokens",
+            "model_context_window_exceeded",
+        }:
+            raise RuntimeError(
+                "Claude no completó la respuesta. "
+                f"stop_reason={response.stop_reason}; "
+                f"input_tokens={response.usage.input_tokens}; "
+                f"output_tokens={response.usage.output_tokens}; "
+                f"max_tokens_configurado={self._max_tokens}; "
+                f"message_id={response.id}"
+            )
 
         parsed = response.parsed_output
+
         if not isinstance(parsed, PortfolioReport):
             raise RuntimeError(
-                f"API returned unexpected output type: {type(parsed)}. "
-                f"Expected PortfolioReport."
+                "Claude no generó un PortfolioReport válido. "
+                f"stop_reason={response.stop_reason}; "
+                f"input_tokens={response.usage.input_tokens}; "
+                f"output_tokens={response.usage.output_tokens}; "
+                f"max_tokens_configurado={self._max_tokens}; "
+                f"parsed_type={type(parsed).__name__}; "
+                f"message_id={response.id}"
             )
 
         log.info(
