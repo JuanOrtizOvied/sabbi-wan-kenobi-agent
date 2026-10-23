@@ -11,7 +11,7 @@ class NestedItem(BaseModel):
 
 class PortafolioItem(BaseModel):
     cuenta_bancaria_inversion: str
-    tipo_activo: str
+    tipo_activo: str | None
     pertenencia: str
     moneda_invertida: Optional[str] = None
     valor_estimado_usd: float
