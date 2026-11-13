@@ -1,10 +1,13 @@
+import asyncio
 import io
+import logging
 
 from datetime import datetime, timezone
-from typing import List
+from typing import Any, Dict, List
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
+from pydantic import BaseModel
 from app.api.informe_patrimonial.schemas import ChatRequest, ChatResponse
 from app.services.informe_patrimonial.calidad_portafolio.agent_service import AgentService
 from app.services.informe_patrimonial.calidad_portafolio.anthropic_agent_service import AgentService as AnthropicAgentServiceCalidad
@@ -44,6 +47,27 @@ portfolio_analyzer_agent = PortfolioAnalyzerAgentService()
 portfolio_analyzer_anthropic_agent = PortfolioAnalyzerAnthropicAgentService()
 resumen_ejecutivo_anthropic_agent = ResumenEjecutivoAnthropicAgent()
 radiografia_patrimonial_anthropic_agent = RadiografiaPatrimonialAnthropicAgent()
+
+log = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Schemas para la ruta combinada Calidad de Portafolio + Riesgo Estructural
+# (puedes moverlos a app/api/informe_patrimonial/schemas.py)
+# ---------------------------------------------------------------------------
+class CalidadRiesgoRequest(BaseModel):
+    calidad_portafolio: Dict[str, Any]
+    riesgo_estructural: Dict[str, Any]
+
+
+class SeccionReply(BaseModel):
+    reply: Dict[str, Any]
+    response_id: str
+
+
+class CalidadRiesgoResponse(BaseModel):
+    calidad_portafolio: SeccionReply
+    riesgo_estructural: SeccionReply
 
 
 @informe_patrimonial_router.post("/calidad-portafolio", response_model=ChatResponse)
@@ -90,6 +114,59 @@ def chat(req: ChatRequest) -> ChatResponse:
         return ChatResponse(reply=out.output, response_id=out.response_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@informe_patrimonial_router.post(
+    "/anthropic/calidad-riesgo",
+    response_model=CalidadRiesgoResponse,
+    summary="Calidad de Portafolio + Riesgo Estructural en paralelo",
+)
+async def calidad_y_riesgo(req: CalidadRiesgoRequest) -> CalidadRiesgoResponse:
+    """
+    Ejecuta en paralelo los agentes Anthropic de Calidad de Portafolio y
+    Riesgo Estructural. Los servicios usan el cliente síncrono de Anthropic,
+    así que cada uno corre en un hilo aparte (asyncio.to_thread) y no bloquea
+    el event loop. El tiempo total ≈ el del agente más lento.
+    """
+    secciones = ("calidad_portafolio", "riesgo_estructural")
+
+    results = await asyncio.gather(
+        asyncio.to_thread(
+            anthropic_agent_service_calidad_portafolio.reply,
+            json_data=req.calidad_portafolio.json_data,
+        ),
+        asyncio.to_thread(
+            structural_risk_anthropic_agent.reply,
+            json_data=req.riesgo_estructural.json_data,
+        ),
+        return_exceptions=True,
+    )
+
+    # Si alguna sección falla, se reporta cuál (y se loguea el error de cada una)
+    errores = {
+        nombre: res for nombre, res in zip(secciones, results)
+        if isinstance(res, BaseException)
+    }
+    if errores:
+        for nombre, exc in errores.items():
+            log.error("Fallo en sección %s: %s", nombre, exc, exc_info=exc)
+        status = 400 if all(isinstance(e, (TypeError, ValueError)) for e in errores.values()) else 500
+        raise HTTPException(
+            status_code=status,
+            detail={nombre: str(exc) for nombre, exc in errores.items()},
+        )
+
+    calidad_out, riesgo_out = results
+    return CalidadRiesgoResponse(
+        calidad_portafolio=SeccionReply(
+            reply=calidad_out.parsed,
+            response_id=calidad_out.response_id,
+        ),
+        riesgo_estructural=SeccionReply(
+            reply=riesgo_out.output,
+            response_id=riesgo_out.response_id,
+        ),
+    )
 
 
 @informe_patrimonial_router.post("/resumen-ejecutivo", response_model=ChatResponse)
