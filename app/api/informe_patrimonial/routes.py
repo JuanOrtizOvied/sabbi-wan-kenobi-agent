@@ -133,11 +133,11 @@ async def calidad_y_riesgo(req: CalidadRiesgoRequest) -> CalidadRiesgoResponse:
     results = await asyncio.gather(
         asyncio.to_thread(
             anthropic_agent_service_calidad_portafolio.reply,
-            json_data=req.calidad_portafolio.json_data,
+            json_data=req.calidad_portafolio,
         ),
         asyncio.to_thread(
             structural_risk_anthropic_agent.reply,
-            json_data=req.riesgo_estructural.json_data,
+            json_data=req.riesgo_estructural,
         ),
         return_exceptions=True,
     )
